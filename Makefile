@@ -1,9 +1,9 @@
-CXX=g++
+CXX=mpic++
 ifeq ($(DEBUG),yes)
-	CFLAGS=-std=c++11 -g -fopenmp -pthread -Wall -pedantic
+	CXXFLAGS=-std=c++11 -g -fopenmp -pthread -Wall -pedantic
 	LDFLAGS= -pthread -lm
 else
-	CFLAGS=-std=c++11 -O3 -mnative -fopenmp -pthread -Wall -pedantic
+	CXXFLAGS=-std=c++11 -O3 -march=native -fopenmp -pthread -Wall -pedantic
 	LDFLAGS= -pthread -lm
 endif
 EXEC= raytracer.exe

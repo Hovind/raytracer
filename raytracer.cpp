@@ -27,6 +27,7 @@
 #include <vector>
 #include <iostream>
 #include <cassert>
+#include <mpi.h>
 
 #if defined __linux__ || defined __APPLE__
 // "Compiled for Linux
@@ -225,13 +226,19 @@ void render(const std::vector<Sphere> &spheres)
     // Trace rays
     for (unsigned y = 0; y < height; ++y) {
         for (unsigned x = 0; x < width; ++x, ++pixel) {
+						/* We now have a pixel (x, y) */
             float xx = (2 * ((x + 0.5) * invWidth) - 1) * angle * aspectratio;
             float yy = (1 - 2 * ((y + 0.5) * invHeight)) * angle;
+						/* What are xx and yy? Linear coordinate transformation
+						 * xx elem [0, angle*aspectratio],
+						 * yy elem [0, angle] */
+							
             Vec3f raydir(xx, yy, -1);
             raydir.normalize();
             *pixel = trace(Vec3f(0), raydir, spheres, 0);
         }
     }
+
     // Save result to a PPM image (keep these flags if you compile under Windows)
     std::ofstream ofs("./untitled.ppm", std::ios::out | std::ios::binary);
     ofs << "P6\n" << width << " " << height << "\n255\n";
@@ -249,28 +256,87 @@ void render(const std::vector<Sphere> &spheres)
 // and 1 light (which is also a sphere). Then, once the scene description is complete
 // we render that scene, by calling the render() function.
 //[/comment]
+void generate_scene(std::vector<Sphere> &spheres, int nbSpheres)
+{
+		/* Seed random generator */
+		srand48(13);
+		
+		/* position, radius, surface color, reflectivity, transparency, emission
+		 * color */
+		/* Generate world sphere */
+		spheres.push_back(Sphere(Vec3f( 0.0, -10004, -20), 10000, Vec3f(0.80, 0.20, 0.20), 0, 0.0));
+
+		for (int i = 0; i < nbSpheres; ++i) {
+				float x,y,z,rd,r,b,g,t;
+				x = (rand()/(1.*RAND_MAX))*20.-10.;
+				y = (rand()/(1.*RAND_MAX))*2.-1.;
+				z = (rand()/(1.*RAND_MAX))*10.-25.;
+				rd = (rand()/(1.*RAND_MAX))*0.9+0.1;
+				r  = (rand()/(1.*RAND_MAX));
+				g  = (rand()/(1.*RAND_MAX));
+				b  = (rand()/(1.*RAND_MAX));
+				t  = (rand()/(1.*RAND_MAX))*0.5;
+				spheres.push_back(Sphere(Vec3f(x, y, z), rd, Vec3f(r, g, b), 1, t));
+		}
+		/* Add light source */
+		spheres.push_back(Sphere(Vec3f(0.0, 20, -30), 3, Vec3f(0.00, 0.00, 0.00), 0, 0.0, Vec3f(3)));
+		return spheres;
+}
+
+
 int main(int argc, char **argv)
 {
-    srand48(13);
-    std::vector<Sphere> spheres;
-    // position, radius, surface color, reflectivity, transparency, emission color
-    spheres.push_back(Sphere(Vec3f( 0.0, -10004, -20), 10000, Vec3f(0.20, 0.20, 0.20), 0, 0.0));
-    const int nbSpheres = 100;
-    for ( int i = 0; i < nbSpheres; ++i ) {
-      float x,y,z,rd,r,b,g,t;
-      x = (rand()/(1.*RAND_MAX))*20.-10.;
-      y = (rand()/(1.*RAND_MAX))*2.-1.;
-      z = (rand()/(1.*RAND_MAX))*10.-25.;
-      rd = (rand()/(1.*RAND_MAX))*0.9+0.1;
-      r  = (rand()/(1.*RAND_MAX));
-      g  = (rand()/(1.*RAND_MAX));
-      b  = (rand()/(1.*RAND_MAX));
-      t  = (rand()/(1.*RAND_MAX))*0.5;
-      spheres.push_back(Sphere(Vec3f( x,      y, z),     rd, Vec3f(r, g, b), 1, t));
+		/* Get provided support for threads, world size and world rank */
+		int provided, size, rank;
+		MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
+		MPI_Comm_size(MPI_COMM_WORLD, &size);
+		MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+		const int nbSpheres = 100;
+		std::vector<Sphere> spheres;
+		if (rank == 0) {
+				spheres = generate_scene(spheres, nbSpheres);
+		}
+		
+		MPI_Bcast(spheres.data(), 3*nbSpheres, MPI_FLOAT, 0, MPI_COMM_WORLD);
+		
+		if (rank == 0) {
+				const int slaves = size - 1;
+				int task;
+				/* Send initial tasks */
+				for (task = 0; task < slaves && task < height; ++task) {
+						MPI_Send(task, 1, MPI_INT, 0, 0, MPI_COMM_WORLD); 
+				}
+		} else {
+				do {
+						MPI_Recv
+						
+				} while (y >= 0);
+		}
+		if (rank == 0) {
+				/* GATHER */
+
+				/* SAVE PICTURE */
+    		render(spheres);
     }
-    // light
-    spheres.push_back(Sphere(Vec3f( 0.0,     20, -30),     3, Vec3f(0.00, 0.00, 0.00), 0, 0.0, Vec3f(3)));
-    render(spheres);
-    
     return 0;
+}
+
+
+void calculate_line(Vec3f &pixel, std::vector<Sphere> &spheres, unsigned y,
+		unsigned width, unsigned height,
+		float angle, float aspectratio)
+{
+		Vec3f pixel = new Vec3f[width];
+		float yy = (1 - 2 * ((y + 0.5) * invHeight)) * angle;
+		for (unsigned x = 0; x < width; ++x, ++pixel) {
+				/* We now have a pixel (x, y) */
+				float xx = (2 * ((x + 0.5) * invWidth) - 1) * angle * aspectratio;
+				/* xx elem [0, angle*aspectratio],
+				 * yy elem [0, angle] */
+					
+				Vec3f raydir(xx, yy, -1);
+				raydir.normalize();
+				*pixel = trace(Vec3f(0), raydir, spheres, 0);
+		}
 }
