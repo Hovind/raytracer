@@ -5,7 +5,7 @@
 // c++ -o raytracer -O3 -Wall raytracer.cpp
 // [/compile]
 // [ignore]
-// Copyright (C) 2012  www.scratchapixel.com
+// Copyright (C) 2012  www.scratchaimage.com
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -212,51 +212,14 @@ Vec3f trace(
 }
 
 //[comment]
-// Main rendering function. We compute a camera ray for each pixel of the image
-// trace it and return a color. If the ray hits a sphere, we return the color of the
-// sphere at the intersection point, else we return the background color.
-//[/comment]
-void render(const std::vector<Sphere> &spheres)
-{
-    unsigned width = 1280, height = 1024;
-    Vec3f *image = new Vec3f[width * height], *pixel = image;
-    float invWidth = 1 / float(width), invHeight = 1 / float(height);
-    float fov = 30, aspectratio = width / float(height);
-    float angle = tan(M_PI * 0.5 * fov / 180.);
-    // Trace rays
-    for (unsigned y = 0; y < height; ++y) {
-        for (unsigned x = 0; x < width; ++x, ++pixel) {
-						/* We now have a pixel (x, y) */
-            float xx = (2 * ((x + 0.5) * invWidth) - 1) * angle * aspectratio;
-            float yy = (1 - 2 * ((y + 0.5) * invHeight)) * angle;
-						/* What are xx and yy? Linear coordinate transformation
-						 * xx elem [0, angle*aspectratio],
-						 * yy elem [0, angle] */
-							
-            Vec3f raydir(xx, yy, -1);
-            raydir.normalize();
-            *pixel = trace(Vec3f(0), raydir, spheres, 0);
-        }
-    }
-
-    // Save result to a PPM image (keep these flags if you compile under Windows)
-    std::ofstream ofs("./untitled.ppm", std::ios::out | std::ios::binary);
-    ofs << "P6\n" << width << " " << height << "\n255\n";
-    for (unsigned i = 0; i < width * height; ++i) {
-        ofs << (unsigned char)(std::min(float(1), image[i].x) * 255) <<
-               (unsigned char)(std::min(float(1), image[i].y) * 255) <<
-               (unsigned char)(std::min(float(1), image[i].z) * 255);
-    }
-    ofs.close();
-    delete [] image;
-}
-
-//[comment]
 // In the main function, we will create the scene which is composed of 5 spheres
 // and 1 light (which is also a sphere). Then, once the scene description is complete
 // we render that scene, by calling the render() function.
 //[/comment]
-void generate_scene(std::vector<Sphere> &spheres, int nbSpheres)
+void generate_scene(std::vector<Sphere> &spheres, int nbSpheres,
+										unsigned int height, unsigned int width,
+										float invHeight, float invWidth,
+										float aspectratio, float angle)
 {
 		/* Seed random generator */
 		srand48(13);
@@ -280,9 +243,28 @@ void generate_scene(std::vector<Sphere> &spheres, int nbSpheres)
 		}
 		/* Add light source */
 		spheres.push_back(Sphere(Vec3f(0.0, 20, -30), 3, Vec3f(0.00, 0.00, 0.00), 0, 0.0, Vec3f(3)));
-		return spheres;
 }
 
+void calculate_line(Vec3f *row, std::vector<Sphere> &spheres, unsigned y,
+		unsigned width, unsigned height,
+		float invWidth, float invHeight,
+		float angle, float aspectratio)
+{
+		float yy = (1 - 2 * ((y + 0.5) * invHeight)) * angle;
+
+		for (unsigned x = 0; x < width; ++x, ++row) {
+				/* We now have a set of coordinates (x, y),  we  project onto
+				 * [0, angle*aspectratio] x [0, angle] */
+				float xx = (2 * ((x + 0.5) * invWidth) - 1) * angle * aspectratio;
+				
+				/* Get direction of ray from camera */
+				Vec3f raydir(xx, yy, -1);
+				raydir.normalize();
+
+				/* Trace ray */	
+				*row = trace(Vec3f(0), raydir, spheres, 0);
+		}
+}
 
 int main(int argc, char **argv)
 {
@@ -292,51 +274,86 @@ int main(int argc, char **argv)
 		MPI_Comm_size(MPI_COMM_WORLD, &size);
 		MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-		const int nbSpheres = 100;
+    unsigned int width = 1280, height = 1024;
+    float invWidth = 1 / float(width), invHeight = 1 / float(height);
+    float fov = 30, aspectratio = width / float(height);
+    float angle = tan(M_PI * 0.5f * fov / 180.0f);
+		int nbSpheres = 100;
+
 		std::vector<Sphere> spheres;
 		if (rank == 0) {
-				spheres = generate_scene(spheres, nbSpheres);
+				generate_scene(spheres, nbSpheres, width, height, invWidth, invHeight,
+											 aspectratio, angle);
 		}
 		
 		MPI_Bcast(spheres.data(), 3*nbSpheres, MPI_FLOAT, 0, MPI_COMM_WORLD);
 		
+		int line;
+		Vec3f *row = new Vec3f[width];
+		MPI_Status status;
 		if (rank == 0) {
-				const int slaves = size - 1;
-				int task;
-				/* Send initial tasks */
-				for (task = 0; task < slaves && task < height; ++task) {
-						MPI_Send(task, 1, MPI_INT, 0, 0, MPI_COMM_WORLD); 
-				}
-		} else {
-				do {
-						MPI_Recv
-						
-				} while (y >= 0);
-		}
-		if (rank == 0) {
-				/* GATHER */
+				/* Thy bidding, master? */
+    		Vec3f *image = new Vec3f[width * height];
 
-				/* SAVE PICTURE */
-    		render(spheres);
-    }
+				/* Send initial tasks */
+				for (line = 0; line < size - 1 && line < height; ++line) {
+						MPI_Send(&line, 1, MPI_INT, line + 1, 0, MPI_COMM_WORLD); 
+				}
+				for (;line < height; ++line) {
+						MPI_Recv(row, 3*width, MPI_FLOAT, MPI_ANY_SOURCE, MPI_ANY_TAG,
+										 MPI_COMM_WORLD, &status);
+
+						/* Memcpy the received stuff */
+						for (int x = 0; x < width; ++x)
+								image[status.MPI_TAG * width + x] = row[x];
+
+						/* Send more work */
+						MPI_Send(&line, 1, MPI_INT, status.MPI_SOURCE, 0,
+										 MPI_COMM_WORLD);
+				}
+
+				/* Signal work done */
+
+				for (int slave = 1; slave < size; ++slave) {
+						MPI_Recv(row, 3*width, MPI_FLOAT, MPI_ANY_SOURCE, MPI_ANY_TAG,
+										 MPI_COMM_WORLD, &status);
+
+						/* Memcpy the received stuff */
+						for (int x = 0; x < width; ++x)
+								image[status.MPI_TAG * width + x] = row[x];
+
+						/* Send height to put slave to rest */
+						MPI_Send(&height, 1, MPI_INT, slave, status.MPI_SOURCE, MPI_COMM_WORLD);
+				}
+				/* Save picture */
+				std::ofstream ofs("./untitled.ppm", std::ios::out | std::ios::binary);
+				ofs << "P6\n" << width << " " << height << "\n255\n";
+				for (unsigned i = 0; i < width * height; ++i) {
+						ofs << (unsigned char)(std::min(float(1), image[i].x) * 255) <<
+									 (unsigned char)(std::min(float(1), image[i].y) * 255) <<
+									 (unsigned char)(std::min(float(1), image[i].z) * 255);
+				}
+				ofs.close();
+
+				/* Deallocate */
+				delete [] image;
+
+		} else {
+				/* Work, work */
+				do {
+						MPI_Recv(&line, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD,
+										 &status);
+						if (line < height) {
+								calculate_line(row, spheres, line, width, height, invWidth,
+															 invHeight, angle, aspectratio);
+								MPI_Send(row, 3*width, MPI_FLOAT, 0, line,
+												 MPI_COMM_WORLD); 
+						}
+				} while(line < height);
+		}
+
+		delete [] row;
     return 0;
 }
 
 
-void calculate_line(Vec3f &pixel, std::vector<Sphere> &spheres, unsigned y,
-		unsigned width, unsigned height,
-		float angle, float aspectratio)
-{
-		Vec3f pixel = new Vec3f[width];
-		float yy = (1 - 2 * ((y + 0.5) * invHeight)) * angle;
-		for (unsigned x = 0; x < width; ++x, ++pixel) {
-				/* We now have a pixel (x, y) */
-				float xx = (2 * ((x + 0.5) * invWidth) - 1) * angle * aspectratio;
-				/* xx elem [0, angle*aspectratio],
-				 * yy elem [0, angle] */
-					
-				Vec3f raydir(xx, yy, -1);
-				raydir.normalize();
-				*pixel = trace(Vec3f(0), raydir, spheres, 0);
-		}
-}
