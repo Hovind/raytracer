@@ -211,11 +211,6 @@ Vec3f trace(
     return surfaceColor + sphere->emissionColor;
 }
 
-//[comment]
-// In the main function, we will create the scene which is composed of 5 spheres
-// and 1 light (which is also a sphere). Then, once the scene description is complete
-// we render that scene, by calling the render() function.
-//[/comment]
 void generate_scene(std::vector<Sphere> &spheres, int nbSpheres,
 										unsigned int height, unsigned int width,
 										float invHeight, float invWidth,
@@ -266,6 +261,12 @@ void calculate_line(Vec3f *row, std::vector<Sphere> &spheres, unsigned y,
 		}
 }
 
+//[comment]
+// In the main function, we will create the scene which is composed of 5 spheres
+// and 1 light (which is also a sphere). Then, once the scene description is complete
+// we render that scene, by calling the render() function.
+//[/comment]
+
 int main(int argc, char **argv)
 {
 		/* Get provided support for threads, world size and world rank */
@@ -280,6 +281,7 @@ int main(int argc, char **argv)
     float angle = tan(M_PI * 0.5f * fov / 180.0f);
 		int nbSpheres = 100;
 
+/*
 		std::vector<Sphere> spheres;
 		if (rank == 0) {
 				generate_scene(spheres, nbSpheres, width, height, invWidth, invHeight,
@@ -287,7 +289,10 @@ int main(int argc, char **argv)
 		}
 		
 		MPI_Bcast(spheres.data(), 3*nbSpheres, MPI_FLOAT, 0, MPI_COMM_WORLD);
-		
+	*/	
+		std::vector<Sphere> spheres;
+		generate_scene(spheres, nbSpheres, width, height, invWidth, invHeight,
+									 aspectratio, angle);
 		int line;
 		Vec3f *row = new Vec3f[width];
 		MPI_Status status;
@@ -343,16 +348,18 @@ int main(int argc, char **argv)
 				do {
 						MPI_Recv(&line, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD,
 										 &status);
+						//std::cout << "Got line " << line << std::endl;
 						if (line < height) {
 								calculate_line(row, spheres, line, width, height, invWidth,
+
 															 invHeight, angle, aspectratio);
 								MPI_Send(row, 3*width, MPI_FLOAT, 0, line,
 												 MPI_COMM_WORLD); 
 						}
 				} while(line < height);
 		}
-
 		delete [] row;
+		MPI_Finalize();
     return 0;
 }
 
