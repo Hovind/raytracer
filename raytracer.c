@@ -128,36 +128,46 @@ mix(float a, float b, float mix)
 // is the color of the object at the intersection point, otherwise it returns
 // the background color.
 //[/comment]
-
+ 
 int
-trace(float origin[], float dir[], struct sphere *spheres, unsigned int nspheres, int depth, float colour[])
-{
-	//if (raydir.length() != 1) std::cerr << "Error " << raydir << std::endl;
-	float entry_min = INFINITY;
-	struct sphere *sphere = NULL;
-	float entry = INFINITY;
-	float exit = INFINITY;
-	unsigned int i;
-	
-	// find intersection of this ray with the sphere in the scene
+find_first_intersection(struct sphere *spheres, unsgined int nspheres, float origin[], float dir[], struct sphere *intersected_sphere, float *intersected_entry) {	
+	float entry;
+	float exit;
+	int ret = 0;
+
+	*intersected_entry = INFINITY;
 	for (i = 0; i < nspheres; ++i) {
 		if (intersect(spheres[i], origin, dir, &entry, &exit)) {
 			if (entry < 0)
-				t0 = t1;
+				entry = exit;
 	
-			if (entry < entry_min) {
-			        entry_min = entry;
-			        sphere = &spheres[i];
+			if (entry < *intersected_entry) {
+				/* We have found a "new first intersection" */
+				ret = 1;
+				*intersected_entry = entry;
+				intersected_sphere = &spheres[i];
 			}
 		}
 	}
-	// if there's no intersection return black or background color
-	if (!sphere)
+	return ret;
+}
+
+int
+trace(struct sphere *spheres, unsigned int nspheres, float origin[], float dir[], int depth, float colour[])
+{
+	//if (raydir.length() != 1) std::cerr << "Error " << raydir << std::endl;
+	struct sphere *sphere;
+	float entry;
+	unsigned int i;
+	
+	// find intersection of this ray with the sphere in the scene
+	if (!find_first_intersection(spheres, nspheres, origin, dir, sphere, &entry))
 		return 0;
+
 	surface_colour[3] = {0.0, 0.0, 0.0}; // color of the ray/surfaceof the object intersected by the ray
 	
 	copy(origin_to_hit, dir);
-	scale(origin_to_hit, entry);
+	scale(origin_to_hit, entry_min);
 	
 	add(hit_point, origin, origin_to_hit);
 	sub(hit_normal, hit_point, sphere->center);
@@ -167,7 +177,7 @@ trace(float origin[], float dir[], struct sphere *spheres, unsigned int nspheres
 	bias = 1e-4;
 	inside = 0;
 
-	if (dot(dir, nhit) > 0) {
+	if (dot(dir, hit_normal) > 0) {
 		nhit = -nhit;
 		inside = 1;
 	}

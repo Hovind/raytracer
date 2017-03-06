@@ -247,6 +247,12 @@ void calculate_line(Vec3f *row, std::vector<Sphere> &spheres, unsigned y,
 {
 		float yy = (1 - 2 * ((y + 0.5) * invHeight)) * angle;
 
+		/*unsigned nbThreads = 5;
+		for (unsigned t = 0; t < nbThreads; ++t)
+				calculate_segment(row + t * 3 * length, &spheres ...
+		for (..)
+				threads.join()
+		*/
 		for (unsigned x = 0; x < width; ++x, ++row) {
 				/* We now have a set of coordinates (x, y),  we  project onto
 				 * [0, angle*aspectratio] x [0, angle] */
@@ -304,7 +310,7 @@ int main(int argc, char **argv)
 				for (line = 0; line < size - 1 && line < height; ++line) {
 						MPI_Send(&line, 1, MPI_INT, line + 1, 0, MPI_COMM_WORLD); 
 				}
-				for (;line < height; ++line) {
+				for (; line < height; ++line) {
 						MPI_Recv(row, 3*width, MPI_FLOAT, MPI_ANY_SOURCE, MPI_ANY_TAG,
 										 MPI_COMM_WORLD, &status);
 
