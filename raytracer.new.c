@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include <mpi.h>
 
 #define N 3
@@ -73,7 +74,20 @@ scale(float vec[], float s)
 void
 normalize(float vec[])
 {
-	scale(1 / length(vec), vec);
+	scale(vec, length(vec));
+}
+
+float
+mixf(float a, float b, float mix)
+{
+    return b * mix + a * (1.0 - mix);
+}
+
+void
+mix(float res[], float lhs[], float rhs[], float mix)
+{
+    for (i = 0; i < N; ++)
+        res[i] = mixf(lhs[i], rhs[i], mix);
 }
 
 float
@@ -155,18 +169,6 @@ intersect(float origin[], float dir[], struct sphere *sphere, float *entry, floa
 	return 1;
 }
 
-float
-mixf(float a, float b, float mix)
-{
-    return b * mix + a * (1.0 - mix);
-}
-
-void
-mix(float res[], float lhs[], float rhs[], float mix)
-{
-    for (i = 0; i < N; ++)
-        res[i] = mixf(lhs[i], rhs[i], mix);
-}
 /*
 int
 find_first_intersection(struct sphere *spheres, unsgined int nspheres, float origin[], float dir[], struct sphere *intersected_sphere, float *intersected_entry) {	
