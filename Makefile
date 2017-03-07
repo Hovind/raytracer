@@ -21,7 +21,7 @@ raytracer.exe: $(OBJ)
 	@$(CXX) -o $@ $^ $(LDFLAGS)
 
 %.o : %.cpp
-	@$(CXX) -o $@ -c $< $(CFLAGS)
+	@$(CXX) -o $@ -c $< $(CXXFLAGS)
 
 .PHONY: clean cleanall
 

@@ -128,18 +128,7 @@ mix(float a, float b, float mix)
 // is the color of the object at the intersection point, otherwise it returns
 // the background color.
 //[/comment]
-
-/* res = origin + length * dir */
-void
-construct(float res[], float origin[], float dir[], float length)
-{
-	float tmp[N];
-	copy(tmp, dir);
-	scale(tmp, length);
-	
-	add(res, origin, tmp);
-}
-	
+ 
 int
 find_first_intersection(struct sphere *spheres, unsgined int nspheres, float origin[], float dir[], struct sphere *intersected_sphere, float *intersected_entry) {	
 	float entry;
@@ -177,8 +166,10 @@ trace(struct sphere *spheres, unsigned int nspheres, float origin[], float dir[]
 
 	surface_colour[3] = {0.0, 0.0, 0.0}; // color of the ray/surfaceof the object intersected by the ray
 	
-	construct(hit_point, origin, dir, entry);
-
+	copy(origin_to_hit, dir);
+	scale(origin_to_hit, entry_min);
+	
+	add(hit_point, origin, origin_to_hit);
 	sub(hit_normal, hit_point, sphere->center);
 	normalize(hit_normal);
 
@@ -198,12 +189,16 @@ trace(struct sphere *spheres, unsigned int nspheres, float origin[], float dir[]
 		fresnel_effect = mix(pow(1 - facingratio, 3), 1.0, 0.1);
 
 		/* Compute reflection direction, all vectors are already normalized */
-		construct(reflection_dir, ray_dir, hit_normal, - 2.0 * dot(ray_dir, hit_normal);
+		copy(reflection_dir, hit_normal);
+		scale(reflection_dir, 2 * dot(dir, reflection_dir));
+		sub(reflection_dir, dir, reflection_dir);
 		normalize(reflection_dir);
 
-		construct(refraction_dir, hit_point, hit_normal, bias);
-		trace(reflection, refraction_dir, reflection_dir, spheres, depth + 1);
-		refraction = {0.0, 0.0, 0.0};
+		copy(tmp, hit_normal);
+		scale(tmp, bias);
+		sum(tmp, hit_point, tmp);
+		trace(reflection, tmp, reflection_dir, spheres, depth + 1);
+		refraction = 0;
 
 		Vec3f refraction = 0;
 		// if the sphere is also transparent compute refraction ray (transmission)
@@ -213,7 +208,6 @@ trace(struct sphere *spheres, unsigned int nspheres, float origin[], float dir[]
 			float k = 1 - eta * eta * (1 - cosi * cosi);
 			Vec3f refrdir = raydir * eta + nhit * (eta *  cosi - sqrt(k));
 			normalize(refraction_dir);
-
 			copy(tmp, hit_normal);
 			scale(tmp, bias);
 			sub(tmp, hit_point, tmp);
@@ -438,10 +432,14 @@ main(int argc, char **argv)
 
 	} else {
 		/* Work, work */
-		while (MPI_Recv(&line, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status), line < height) {
-			calculate_line(row, spheres, line, width, height, width_inverse, height_inverse, angle, aspect_ratio);
-			MPI_Send(row, 3*width, MPI_FLOAT, 0, line, MPI_COMM_WORLD); 
-		}
+		do {
+			MPI_Recv(&line, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+			//std::cout << "Got line " << line << std::endl;
+			if (line < height) {
+				calculate_line(row, spheres, line, width, height, width_inverse, height_inverse, angle, aspect_ratio);
+				MPI_Send(row, 3*width, MPI_FLOAT, 0, line, MPI_COMM_WORLD); 
+			}
+		} while(line < height);
 	}
 	delete [] row;
 	MPI_Finalize();
@@ -449,3 +447,111 @@ main(int argc, char **argv)
 }
 
 
+{
+	#define MAX_RAY_DEPTH 3
+int
+trace(float colour[], struct sphere *spheres, unsigned int nspheres, float
+ray_origin[], float ray_dir[], int depth)
+{
+	{
+	struct sphere *sphere = NULL;
+	float distance_min = INFINITY;
+	float hit_point[N];
+	float hit_normal[N];
+	int i;
+
+	for (i = 0; i < nspheres; ++i) {
+		if (intersect(spheres[i], ray_origin, ray_dir, hit_point, hit_normal)) {
+			float distance = distance(ray_origin, hit_point);
+			if (distance < distance_min) {
+				sphere = &sphere[i];
+				distance_min = distance;
+			}
+		}
+	}
+	if (!sphere)
+		return 0;
+	/* Construct hit point and hit normal */
+	construct(hit_point, ray_origin, ray_dir, distance);
+	sub(hit_normal, hit_point, sphere->center);
+
+	// if the object material is glass, split the ray into a reflection
+	// and a refraction ray.
+	if (object->isGlass && depth < MAX_RAY_DEPTH) {
+		/* Compute reflection */
+		float bias = 1e-4;
+
+		float refraction_colour[3];
+		float reflection_colour[3];
+
+		float reflection_origin[N];
+		float reflection_dir[N];
+
+		construct(reflection_origin, hit_point, hit_normal, bias);
+		construct(reflection_dir, ray_dir, hit_normal, -2.0 * dot(ray_dir, hit_normal));
+
+		// recurse
+		trace(reflection_colour, reflection_origin, reflection_dir, spheres, nspheres, depth + 1);
+
+		/* Compute refraction */
+		if (sphere->transparency) {
+			/* Refraction origin is the hit point of ray */
+			float refraction_origin[N];
+			float refraction_dir[N];
+
+			construct(refraction_origin, hit_point, hit_normal, -1.0 * bias);
+			construct_refraction_dir(refraction_dir, hit_point, ray_dir, hit_normal);
+			trace(refraction_colour, refraction_origin, refraction_dir, spheres, nspheres, depth + 1);
+		}
+
+		/* Calculate fresnel effect */
+		fresnel_effect = fresnel(sphere, hit_normal, ray_dir);
+		mix(colour, reflection_colour, refraction_colour, fresnel_effect);
+	} else {
+		// object is a diffuse opaque object
+		// compute illumination
+
+		/* Find lights */
+		shadow_dir = light_position - hit_point;
+		bool isShadow = false;
+		for (i = 0; i < nspheres; ++i) {
+			if (intersect(objects[i], shadow_origin, shadow_dir)) {
+				// hit point is in shadow so just return
+				break;
+			}
+		} 
+		colour = {0.0, 0.0, 0.0};
+	}
+} 
+
+float
+fresnel(float hit_normal[], float ray_dir[], float a)
+{
+	return mix(pow(1.0 + dot(ray_dir, hit_normal), 3), 1.0, a);
+}
+
+void
+add_weighted(float res[], float lhs[], float a, float rhs[], float b)
+{
+	int i;
+	for (i = 0; i < N; ++i)
+		res[i] = a * lhs[i] + b * rhs[i];
+}
+
+void
+construct_refraction_dir(float refraction_dir[], float refraction_origin[],
+float ray_dir[], float hit_normal[], int inside)
+{
+	float cosi;
+	float k;
+	float eta = 1.1;
+
+	if (!inside)
+		eta = 1 / eta;
+
+	cosi = -1.0 * dot(hit_normal, ray_dir);
+	k = 1 - eta * eta * (1 - cosi * cosi);
+
+	add_weighted(refraction_dir, ray_dir, eta, hit_normal, eta * cosi - sqrt(k));
+	normalize(refraction_dir);
+}
