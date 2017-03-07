@@ -25,6 +25,7 @@
 #include <cmath>
 #include <fstream>
 #include <vector>
+#include <ctime>
 #include <iostream>
 #include <cassert>
 #include <mpi.h>
@@ -216,8 +217,6 @@ void generate_scene(std::vector<Sphere> &spheres, int nbSpheres,
 										float invHeight, float invWidth,
 										float aspectratio, float angle)
 {
-		/* Seed random generator */
-		srand48(13);
 		
 		/* position, radius, surface color, reflectivity, transparency, emission
 		 * color */
@@ -275,11 +274,16 @@ void calculate_line(Vec3f *row, std::vector<Sphere> &spheres, unsigned y,
 
 int main(int argc, char **argv)
 {
+
 		/* Get provided support for threads, world size and world rank */
 		int provided, size, rank;
 		MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
 		MPI_Comm_size(MPI_COMM_WORLD, &size);
 		MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+		/* Seed random generator */
+		/*srand(rank);*/
+		srand(time(NULL));
 
     unsigned int width = 1280, height = 1024;
     float invWidth = 1 / float(width), invHeight = 1 / float(height);
@@ -351,18 +355,11 @@ int main(int argc, char **argv)
 
 		} else {
 				/* Work, work */
-				do {
-						MPI_Recv(&line, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD,
-										 &status);
+				while (MPI_Recv(&line, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status), line < height) {
 						//std::cout << "Got line " << line << std::endl;
-						if (line < height) {
-								calculate_line(row, spheres, line, width, height, invWidth,
-
-															 invHeight, angle, aspectratio);
-								MPI_Send(row, 3*width, MPI_FLOAT, 0, line,
-												 MPI_COMM_WORLD); 
-						}
-				} while(line < height);
+						calculate_line(row, spheres, line, width, height, invWidth, invHeight, angle, aspectratio);
+						MPI_Send(row, 3*width, MPI_FLOAT, 0, line, MPI_COMM_WORLD); 
+				}
 		}
 		delete [] row;
 		MPI_Finalize();
