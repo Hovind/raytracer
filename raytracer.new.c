@@ -66,15 +66,15 @@ length(float vec[])
 void
 scale(float vec[], float s)
 {
-	int i;
-	for (i = 0; i < N; ++i)
-		vec[i] *= s;
+		int i;
+		for (i = 0; i < N; ++i)
+				vec[i] *= s;
 }
 
 void
 normalize(float vec[])
 {
-	scale(vec, length(vec));
+		scale(vec, length(vec));
 }
 
 float
@@ -86,7 +86,8 @@ mixf(float a, float b, float mix)
 void
 mix(float res[], float lhs[], float rhs[], float mix)
 {
-    for (i = 0; i < N; ++)
+		int i;
+    for (i = 0; i < N; ++i)
         res[i] = mixf(lhs[i], rhs[i], mix);
 }
 
@@ -194,13 +195,13 @@ find_first_intersection(struct sphere *spheres, unsgined int nspheres, float ori
 }*/
 float
 randomf(void) {
-	return rand() / float(RAND_MAX);
+		return rand() / float(RAND_MAX);
 }
 
 float
 randomf_in_range(float min, float max)
 {
-	return randomf() * (max - min) + min;
+		return randomf() * (max - min) + min;
 }
 
 void
