@@ -164,7 +164,7 @@ find_first_intersection(struct sphere *spheres, unsgined int nspheres, float ori
 }
 
 int
-trace(struct sphere *spheres, unsigned int nspheres, float origin[], float dir[], int depth, float colour[])
+trace(float colour[], float origin[], float dir[], struct sphere *spheres, unsigned int nspheres, int depth)
 {
 	//if (raydir.length() != 1) std::cerr << "Error " << raydir << std::endl;
 	struct sphere *sphere;
@@ -353,7 +353,7 @@ void calculate_line(float *row, struct sphere *spheres, unsigned int nspheres, u
 		normalize(dir);
 
 		/* Trace ray */	
-		trace(row, origin, dir, spheres, 0);
+		trace(row, origin, dir, spheres, nspheres, 0);
 	}
 }
 
