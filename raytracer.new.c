@@ -193,15 +193,17 @@ find_first_intersection(struct sphere *spheres, unsgined int nspheres, float ori
 	}
 	return ret;
 }*/
+
 float
-randomf(void) {
-		return rand() / float(RAND_MAX);
+randomf(void)
+{
+	return rand() / (float) RAND_MAX;
 }
 
 float
 randomf_in_range(float min, float max)
 {
-		return randomf() * (max - min) + min;
+	return randomf() * (max - min) + min;
 }
 
 void
