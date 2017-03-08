@@ -215,6 +215,7 @@ aspect_ratio, float angle)
 	unsigned int i;
 	float radius;
 	
+	printf("FIRST\n");
 	/* Generate world sphere */
 	spheres[0].center[0] = 0.0;
 	spheres[0].center[0] = -10000.0;
@@ -266,6 +267,7 @@ aspect_ratio, float angle)
 
 	spheres[nspheres - 1].transparency = 0.0;
 	spheres[nspheres - 1].reflection = 0.0;
+	printf("SECOND\n");
 }
 
 float c2cworld(unsigned int c, float measure_inverse)
@@ -346,16 +348,24 @@ main(int argc, char **argv)
 	MPI_Bcast(spheres.data(), 3*nbSpheres, MPI_FLOAT, 0, MPI_COMM_WORLD);
 	*/	
 	generate_scene(spheres, nspheres, width, height, width_inverse, height_inverse, aspect_ratio, angle);
+	printf("GENERATED!\n");
 	int line;
-	float row[3 * width];
+	printf("STARTING TO MAKE STUFf!\n");
+	float *row = malloc(3 * 1280 * sizeof(*row));
+	printf("MADE STUFF!\n");
 	if (rank == 0) {
+		printf("RANK CHECKED!\n");
 		/* Thy bidding, master? */
 		unsigned int slave;
 		unsigned int x;
-		float image[3 * width * height];
+		printf("MAKING IMAGE!\n");
+		/*float image[3 * width * height];*/
+		float *image = malloc(3 * width * height * sizeof(*image));
+		printf("MADE IMAGE!\n");
 
 		/* Send initial tasks */
 		for (line = 0; line < size - 1 && line < height; ++line) {
+			printf("SENT LINE %u!\n", line);
 			MPI_Send(&line, 1, MPI_INT, line + 1, 0, MPI_COMM_WORLD); 
 		}
 		for (; line < height; ++line) {
@@ -392,6 +402,7 @@ main(int argc, char **argv)
 		ofs.close();*/
 
 		/* Deallocate */
+		free(image);
 
 	} else {
 		/* Work, work */
@@ -404,6 +415,9 @@ main(int argc, char **argv)
 			}
 		} while(line < height);
 	}
+	/* Deallocate */
+	free(row);
+
 	MPI_Finalize();
 	return 0;
 }
