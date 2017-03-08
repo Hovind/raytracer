@@ -214,13 +214,14 @@ generate_scene(struct sphere *spheres, int nspheres)
 	float x;
 	float y;
 	float z;
-	float radius;
+	float radius2;
 	float r;
 	float g;
 	float b;
 	float t;
 	
 	/* Generate world sphere */
+<<<<<<< HEAD
 	spheres[0].center = {0.0, -10000.0, -20.0};
 	spheres[0].radius2 = 10000.0*10000.0;
 	spheres[0].surface_colour[0] = 0.8;
@@ -232,19 +233,30 @@ generate_scene(struct sphere *spheres, int nspheres)
 	spheres[0].emission_colour = {0.0, 0.0, 0.0};
 	spheres[0].transparency = 0.0;
 	spheres[0].reflection = 0.0;
+=======
+	spheres[0] = {
+		.center = {0, -10000.0, -20.0},
+		.radius2 = 10000,
+		.surface_colour = {0.80, 0.20, 0.20},
+		.emission_colour = {0.0, 0.0, 0.0},
+		.transparency = 0.0,
+		.reflection = 0.0,
+	};
+>>>>>>> 2e3be6bb6e39794c72462b90185aa6dd04739e9e
 
 	for (i = 0; i < nspheres - 1; ++i) {
 		x = randomf_in_range(-10.0, 10.0);
 		y = randomf_in_range(-10.0, 10.0);
 		z = randomf_in_range(-10.0, 10.0);
 
-		radius = randomf_in_range(0.1, 1.0);
+		radius2 = randomf_in_range(0.1, 1.0);
 		r = randomf();
 		g = randomf();
 		b = randomf();
 
-
-		spheres[i].center = {x, y, z};
+		spheres[i].center[0] = x;
+		spheres[i].center[1] = y;
+		spheres[i].center[2] = z;
 		spheres[i].radius2 = radius*radius;
 
 		spheres[i].surface_colour[0] = randomf();
@@ -266,6 +278,7 @@ generate_scene(struct sphere *spheres, int nspheres)
 	spheres[nspheres - 1].transparency = 0.0;
 	spheres[nspheres - 1].reflection = 0.0;
 }
+
 float c2cworld(unsigned int c, float measure_inverse)
 {
 	return 2.0 * (c + 0.5) * measure_inverse - 1.0;
@@ -280,18 +293,17 @@ y2yworld(unsigned int y, float height_inverse, float angle)
 float
 x2xworld(unsigned int x, float width_inverse, float angle, float aspect_ratio)
 {
-	return angle * aspect_ratio * c2cworld(y, height_inverse);
+	return angle * aspect_ratio * c2cworld(x, width_inverse);
 }
 
-{
-	
-
-void calculate_line(float *row, struct sphere *spheres, unsigned int nspheres, unsigned int y, unsigned int width, unsigned int height, float width_inverse, float height_inverse, float angle, float aspect_ratio)
+void
+calculate_line(float *row, struct sphere *spheres, unsigned int nspheres, unsigned int y, unsigned int width, unsigned int height, float width_inverse, float height_inverse, float angle, float aspect_ratio)
 {
 	unsigned int x;
 	float xworld;
 	float yworld = y2yworld(y, height_inverse, angle);
-	float zeros[N] = {0.0, 0.0, 0.0};
+	float origin[N] = {0.0, 0.0, 0.0};
+	float dir[N];
 
 	for (x = 0; x < width; ++x, row += 3) {
 		/* We now have a set of coordinates (x, y),  we  project onto
@@ -303,7 +315,7 @@ void calculate_line(float *row, struct sphere *spheres, unsigned int nspheres, u
 		normalize(dir);
 
 		/* Trace ray */	
-		trace(row, origin, dir, spheres, 0);
+		trace(row, origin, dir, spheres, nspheres, 0);
 	}
 }
 
