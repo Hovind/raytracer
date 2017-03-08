@@ -2,11 +2,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include <mpi.h>
+//#include <mpi.h>
 
 #define N 3
 #define MAX_RAY_DEPTH 5
 
+#define SET_COLOUR(colour, r, g, b) { colour[0] = r; colour[1] = g; colour[2] = b; }
 
 void
 copy(float to[], float src[])
@@ -156,7 +157,7 @@ intersect(float origin[], float dir[], struct sphere *sphere, float *entry, floa
 		 return 0;
 
 	/* Pythagoras */
-	t_radius2 = length_square(origin_to_center) - origin_to_t_length * origin_to_t_length;
+	t_radius2 = length_squared(origin_to_center) - origin_to_t_length * origin_to_t_length;
 	if (t_radius2 > sphere->radius2)
 		 return 0;
 
@@ -220,14 +221,17 @@ generate_scene(struct sphere *spheres, int nspheres)
 	float t;
 	
 	/* Generate world sphere */
-	spheres[0] = {
-		.center = {0, -10000.0, -20.0},
-		.radius = 10000,
-		.surface_colour = {0.80, 0.20, 0.20},
-		.emission_colour = {0.0, 0.0, 0.0},
-		.transparency = 0.0,
-		.reflection = 0.0,
-	};
+	spheres[0].center = {0.0, -10000.0, -20.0};
+	spheres[0].radius2 = 10000.0*10000.0;
+	spheres[0].surface_colour[0] = 0.8;
+	spheres[0].surface_colour[1] = 0.2;
+	spheres[0].surface_colour[2] = 0.2;
+	spheres[0].emission_colour[0] = 0.0;
+	spheres[0].emission_colour[1] = 0.0;
+	spheres[0].emission_colour[2] = 0.0;
+	spheres[0].emission_colour = {0.0, 0.0, 0.0};
+	spheres[0].transparency = 0.0;
+	spheres[0].reflection = 0.0;
 
 	for (i = 0; i < nspheres - 1; ++i) {
 		x = randomf_in_range(-10.0, 10.0);
@@ -239,26 +243,28 @@ generate_scene(struct sphere *spheres, int nspheres)
 		g = randomf();
 		b = randomf();
 
-		t = random_in_range(0.0, 0.5);
 
-		spheres[i] = {
-			.center = {x, y, z},
-			.radius = radius,
-			.surface_colour = {r, g, b},
-			.emission_colour = {0.0, 0.0, 0.0},
-			.transparency = t,
-			.reflection = 1.0,
+		spheres[i].center = {x, y, z};
+		spheres[i].radius2 = radius*radius;
+
+		spheres[i].surface_colour[0] = randomf();
+		spheres[i].surface_colour[1] = randomf();
+		spheres[i].surface_colour[2] = randomf();
+		/* SET_COLOUR(spheres[i].surface_colour, r, g, b);
+		SET_COLOUR(spheres[i].emission_colour, 0.0, 0.0, 0.0); */
+		spheres[i].transparency = random_in_range(0.1, 1.0);
+		spheres[i].reflection = 1.0;
 		};
 	}
 	/* Add light source */
-	spheres[nspheres - 1] = {
-		.center = {0.0, 20.0, -30),
-		.radius = 3,
-		.surface_colour = {0.0, 0.0, 0.0},
-		.emisson_colour = {3.0, 3.0, 3.0},
-		.transparency = 0.0,
-		.reflection = 0.0,
-	};
+	spheres[nspheres - 1].center.x = 0.0;
+	spheres[nspheres - 1].center.y = 20.0;
+	spheres[nspheres - 1].center.z = -30.0;
+	spheres[nspheres - 1].radius2 = 3.0*3.0;
+	spheres[nspheres - 1].surface_colour = {0.0, 0.0, 0.0};
+	spheres[nspheres - 1].emisson_colour = {3.0, 3.0, 3.0};
+	spheres[nspheres - 1].transparency = 0.0;
+	spheres[nspheres - 1].reflection = 0.0;
 }
 float c2cworld(unsigned int c, float measure_inverse)
 {
