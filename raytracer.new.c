@@ -158,9 +158,7 @@ intersect(float origin[], float dir[], struct sphere *sphere, float *entry, floa
 	float t_radius2;
 	float surface_to_t_length;
 
-	printf("SUB1\n");
 	sub(origin_to_center, sphere->center, origin);
-	printf("~SUB1\n");
 	origin_to_t_length = dot(origin_to_center, dir);
 	
 	if (origin_to_t_length < 0)
@@ -228,7 +226,7 @@ generate_scene(int nspheres, unsigned int width, unsigned int height, float *wid
 	*height_inverse = 1 / (float) height;
 	*fov = 30.0;
 	*aspect_ratio = width / (float) height;
-	*angle = tan(M_PI * 0.5 * fov / 180.0);
+	*angle = tanf(M_PI * 0.5 * *fov / 180.0);
 	
 	/* Generate world sphere */
 	spheres[0].center[0] = 0.0;
@@ -350,7 +348,7 @@ main(int argc, char **argv)
 	int rank;
 	MPI_Status status;
 
-	int line;
+	size_t line;
 	float *row;
 	struct sphere *spheres;
 	
@@ -372,7 +370,7 @@ main(int argc, char **argv)
 	/* Seed random generator with lucky number */
 	srand(13);
 
-	spheres = generate_scene(nspheres, width, height, width_inverse, height_inverse, fov, aspect_ratio, angle);
+	spheres = generate_scene(nspheres, width, height, &width_inverse,	&height_inverse, &fov, &aspect_ratio, &angle);
 	row = malloc(3 * width * sizeof(*row));
 	if (rank == 0) {
 		/* Thy bidding, master? */
@@ -381,16 +379,14 @@ main(int argc, char **argv)
 		float *image = malloc(3 * width * height * sizeof(*image));
 
 		/* Send initial tasks */
-		for (line = 0; line < size - 1 && line < height; ++line) {
-			printf("SENT LINE %u!\n", line);
+		for (line = 0; line < size - 1 && line < height; ++line)
 			MPI_Send(&line, 1, MPI_INT, line + 1, 0, MPI_COMM_WORLD); 
-		}
+
 		for (; line < height; ++line) {
 			MPI_Recv(row, 3*width, MPI_FLOAT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 
 			/* Memcpy the received stuff */
-			for (x = 0; x < width; ++x)
-				image[status.MPI_TAG * width + x] = row[x];
+			memcpy(image + 3 * status.MPI_TAG * width, row, 3 * width * sizeof(*image));
 
 			/* Send more work */
 			MPI_Send(&line, 1, MPI_INT, status.MPI_SOURCE, 0, MPI_COMM_WORLD);
@@ -402,8 +398,7 @@ main(int argc, char **argv)
 			MPI_Recv(row, 3*width, MPI_FLOAT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 
 			/* Memcpy the received stuff */
-			for (x = 0; x < width; ++x)
-				image[status.MPI_TAG * width + x] = row[x];
+			memcpy(image + 3 * status.MPI_TAG * width, row, 3 * width * sizeof(*image));
 
 			/* Send height to put slave to rest */
 			MPI_Send(&height, 1, MPI_INT, slave, status.MPI_SOURCE, MPI_COMM_WORLD);
@@ -416,12 +411,15 @@ main(int argc, char **argv)
 	} else {
 		/* Work, work */
 		while (MPI_Recv(&line, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status), line < height) {
+			printf("Got line %u\n", line);
 			calculate_line(row, spheres, nspheres, line, width, height, width_inverse, height_inverse, angle, aspect_ratio);
 			MPI_Send(row, 3*width, MPI_FLOAT, 0, line, MPI_COMM_WORLD); 
+			printf("Sent line %u\n", line);
 		}
 	}
 	/* Deallocate */
 	free(row);
+	free(spheres);
 
 	/* Deinit MPI */
 	MPI_Finalize();
@@ -479,9 +477,7 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 
 	/* Construct hit point and hit normal */
 	construct(hit_point, ray_origin, ray_dir, distance);
-	printf("SUB2\n");
 	sub(hit_normal, hit_point, sphere->center);
-	printf("~SUB2\n");
 
 	// if the object material is glass, split the ray into a reflection
 	// and a refraction ray.
@@ -529,9 +525,7 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 				float light_dir[N];
 				
 				construct(light_origin, hit_point, hit_normal, bias);
-				printf("SUB3\n");
 				sub(light_dir, spheres[i].center, hit_point);
-				printf("~SUB3\n");
 				normalize(light_dir);
 
 				transmission_factor = dot(hit_normal, light_dir);
