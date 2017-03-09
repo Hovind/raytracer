@@ -75,7 +75,7 @@ scale(float vec[], float s)
 void
 normalize(float vec[])
 {
-	scale(vec, length(vec));
+	scale(vec, 1.0 / length(vec));
 }
 
 float
@@ -476,11 +476,12 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 	/* Construct hit point and hit normal */
 	construct(hit_point, ray_origin, ray_dir, distance);
 	sub(hit_normal, hit_point, sphere->center);
+	normalize(hit_normal);
 
 	// if the object material is glass, split the ray into a reflection
 	// and a refraction ray.
 	if ((sphere->transparency > 0 || sphere->reflection > 0) && depth < MAX_RAY_DEPTH) {
-		printf("ON DEPTH %u!\n", depth);
+		printf("Depth: %u\n", depth);
 		/* Compute reflection */
 		float refraction_colour[3];
 		float reflection_colour[3];
@@ -500,7 +501,7 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 			/* Refraction origin is the hit point of ray */
 			float refraction_origin[N];
 			float refraction_dir[N];
-			int inside = 0;
+			int inside = 1;
 
 			construct(refraction_origin, hit_point, hit_normal, -1.0 * bias);
 			construct_refraction_dir(refraction_dir, ray_dir, hit_normal, inside);
@@ -512,6 +513,7 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 		fresnel_effect = fresnel(hit_normal, ray_dir, 0.1);
 		mix(colour, reflection_colour, refraction_colour, fresnel_effect);
 	} else {
+		printf("FOUND OPAQUE!\n");
 		// object is a diffuse opaque object
 		// compute illumination
 
@@ -528,8 +530,11 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 				normalize(light_dir);
 
 				transmission_factor = dot(hit_normal, light_dir);
-				if (transmission_factor > 0 && ray_reaches(light_origin, light_dir, i, spheres, nspheres))
+				printf("Factor %f!\n", transmission_factor);
+				if (transmission_factor > 0 && ray_reaches(light_origin, light_dir, i, spheres, nspheres)) {
 					construct(colour, colour, spheres[i].emission_colour, transmission_factor);
+					printf("RAY REACHED!\n");
+				}
 			}
 		} 
 	}
