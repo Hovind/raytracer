@@ -18,7 +18,7 @@ copy(float to[], float src[])
 void
 print(float src[])
 {
-        size_t i;
+        unsigned int i;
         for (i = 0; i < N; ++i)
                 printf("%f ", src[i]);
         printf("\n");
@@ -27,7 +27,7 @@ print(float src[])
 void
 add(float res[], float lhs[], float rhs[])
 {
-	size_t i;
+	int i;
 	for (i = 0; i < N; ++i)
 		res[i] = lhs[i] + rhs[i];
 }
@@ -36,7 +36,7 @@ add(float res[], float lhs[], float rhs[])
 void
 sub(float res[], float lhs[], float rhs[])
 {
-	size_t i;
+	int i;
 	for (i = 0; i < N; ++i)
 		res[i] = lhs[i] - rhs[i];
 }
@@ -44,7 +44,7 @@ sub(float res[], float lhs[], float rhs[])
 float
 dot(float lhs[], float rhs[])
 {
-	size_t i;
+	int i;
 	float ret;
 	for (i = 0; i < N; ++i)
 		ret += lhs[i] * rhs[i];
@@ -67,15 +67,15 @@ length(float vec[])
 void
 scale(float vec[], float s)
 {
-	size_t i;
-	for (i = 0; i < N; ++i)
-		vec[i] *= s;
+		int i;
+		for (i = 0; i < N; ++i)
+				vec[i] *= s;
 }
 
 void
 normalize(float vec[])
 {
-	scale(vec, length(vec));
+		scale(vec, length(vec));
 }
 
 float
@@ -87,9 +87,9 @@ mixf(float a, float b, float mix)
 void
 mix(float res[], float lhs[], float rhs[], float mix)
 {
-	size_t i;
-	for (i = 0; i < 3; ++i)
-	        res[i] = mixf(lhs[i], rhs[i], mix);
+		int i;
+    for (i = 0; i < N; ++i)
+        res[i] = mixf(lhs[i], rhs[i], mix);
 }
 
 float
@@ -101,18 +101,9 @@ fresnel(float hit_normal[], float ray_dir[], float a)
 void
 add_weighted(float res[], float lhs[], float a, float rhs[], float b)
 {
-	size_t i;
+	int i;
 	for (i = 0; i < N; ++i)
 		res[i] = a * lhs[i] + b * rhs[i];
-}
-
-void
-set_colour(float colour[], float r, float g, float b)
-{
-
-	colour[0] = r;
-	colour[1] = g;
-	colour[2] = b;
 }
 
 void
@@ -121,6 +112,7 @@ construct(float res[], float origin[], float dir[], float length)
         float tmp[N];
         copy(tmp, dir);
         scale(tmp, length);
+
         add(res, origin, tmp);
 }
 
@@ -158,9 +150,7 @@ intersect(float origin[], float dir[], struct sphere *sphere, float *entry, floa
 	float t_radius2;
 	float surface_to_t_length;
 
-	printf("SUB1\n");
 	sub(origin_to_center, sphere->center, origin);
-	printf("~SUB1\n");
 	origin_to_t_length = dot(origin_to_center, dir);
 	
 	if (origin_to_t_length < 0)
@@ -217,39 +207,68 @@ randomf_in_range(float min, float max)
 	return randomf() * (max - min) + min;
 }
 
-struct sphere *
-generate_scene(int nspheres, unsigned int width, unsigned int height)
+void
+floats2bytes(unsigned char bytes[], float floats[], size_t n)
+{
+		size_t j;
+		for (j = 0; j < n; ++j)
+				colour_bytes[j] = max(image[j], 1.0) * 255.0;
+}
+
+void
+save_image(char file_name[], unsigned int width, unsigned int height)
+{
+		fopen("untitled.ppm", "wb");
+		fprintf(fp, "P6\n%u %u\n255\n", width, height);
+
+		for (i = 0; i < width * height; ++i) 
+				floats2bytes(colour_bytes, image + 3 * i, 3);	
+				n = fwrite(colour_bytes, sizeof(*colour_bytes), 3,  fp);
+		}
+		fclose(fp);
+
+}
+void
+generate_scene(struct sphere *spheres, int nspheres, unsigned int width,
+unsigned int height, float width_inverse, float height_inverse, float
+aspect_ratio, float angle)
 {
 	unsigned int i;
 	float radius;
-	struct sphere *spheres = malloc(nspheres * sizeof(*spheres));
-	float width_inverse = 1 / (float) width;
-	float height_inverse = 1 / (float) height;
-	float fov = 30.0;
-	float aspect_ratio = width / (float) height;
-	float angle = tan(M_PI * 0.5 * fov / 180.0);
 	
+	printf("FIRST\n");
 	/* Generate world sphere */
 	spheres[0].center[0] = 0.0;
 	spheres[0].center[0] = -10000.0;
 	spheres[0].center[0] = -20.0;
 	spheres[0].radius2 = 10000.0*10000.0;
 
-	set_colour(spheres[0].surface_colour, 0.8, 0.2, 0.2);
-	set_colour(spheres[0].emission_colour, 0.0, 0.0, 0.0);
+	spheres[0].surface_colour[0] = 0.8;
+	spheres[0].surface_colour[1] = 0.2;
+	spheres[0].surface_colour[2] = 0.2;
+	spheres[0].emission_colour[0] = 0.0;
+	spheres[0].emission_colour[1] = 0.0;
+	spheres[0].emission_colour[2] = 0.0;
 
 	spheres[0].transparency = 0.0;
 	spheres[0].reflection = 0.0;
 
-	for (i = 1; i < nspheres - 1; ++i) {
+	for (i = 0; i < nspheres - 1; ++i) {
 		radius = randomf_in_range(0.1, 1.0);
 		spheres[i].center[0] = randomf_in_range(-10.0, 10.0);
 		spheres[i].center[1] = randomf_in_range(-10.0, 10.0);
 		spheres[i].center[2] = randomf_in_range(-10.0, 10.0);
 		spheres[i].radius2 = radius*radius;
 
-		set_colour(spheres[i].surface_colour, randomf(), randomf(), randomf());
-		set_colour(spheres[i].emission_colour, 0.0, 0.0, 0.0);
+		spheres[i].surface_colour[0] = randomf();
+		spheres[i].surface_colour[1] = randomf();
+		spheres[i].surface_colour[2] = randomf();
+
+		spheres[i].emission_colour[0] = 0.0;
+		spheres[i].emission_colour[1] = 0.0;
+		spheres[i].emission_colour[2] = 0.0;
+		/* SET_COLOUR(spheres[i].surface_colour, r, g, b);
+		SET_COLOUR(spheres[i].emission_colour, 0.0, 0.0, 0.0); */
 
 		spheres[i].transparency = randomf_in_range(0.1, 1.0);
 		spheres[i].reflection = 1.0;
@@ -260,13 +279,16 @@ generate_scene(int nspheres, unsigned int width, unsigned int height)
 	spheres[nspheres - 1].center[2] = -30.0;
 	spheres[nspheres - 1].radius2 = 3.0*3.0;
 
-	set_colour(spheres[nspheres - 1].surface_colour, 0.0, 0.0, 0.0);
-	set_colour(spheres[nspheres - 1].emission_colour, 3.0, 3.0, 3.0);
+	spheres[nspheres - 1].surface_colour[0] = 0.0;
+	spheres[nspheres - 1].surface_colour[1] = 0.0;
+	spheres[nspheres - 1].surface_colour[2] = 0.0;
+	spheres[nspheres - 1].emission_colour[0] = 3.0;
+	spheres[nspheres - 1].emission_colour[1] = 3.0;
+	spheres[nspheres - 1].emission_colour[2] = 3.0;
 
 	spheres[nspheres - 1].transparency = 0.0;
 	spheres[nspheres - 1].reflection = 0.0;
-
-	return spheres;
+	printf("SECOND\n");
 }
 
 float c2cworld(unsigned int c, float measure_inverse)
@@ -296,6 +318,8 @@ calculate_line(float *row, struct sphere *spheres, unsigned int nspheres, unsign
 	float dir[N];
 
 	for (x = 0; x < width; ++x, row += 3) {
+		/* We now have a set of coordinates (x, y),  we  project onto
+		 * [0, angle*aspect_ratio] x [0, angle] */
 		xworld = x2xworld(x, width_inverse, angle, aspect_ratio);
 			
 		/* Get direction of ray from camera */
@@ -309,37 +333,6 @@ calculate_line(float *row, struct sphere *spheres, unsigned int nspheres, unsign
 	}
 }
 
-float
-min(float lhs, float rhs)
-{
-	if (lhs < rhs)
-		return lhs;
-	else
-		return  rhs;
-}
-
-void
-float2bytes(unsigned char bytes[], float floats[], size_t n)
-{
-	size_t i;
-	for (i = 0; i < n; ++i)
-		bytes[i] = min(1.0, floats[i]) * 255.0;
-}
-
-void
-save_ppm(char file_name[], float image[], unsigned int width, unsigned int height)
-{
-	size_t i;
-	FILE *fp = fopen(file_name, "wb");
-	fprintf(fp, "P6\n%u %u\n255\n", width, height);
-	for (i = 0; i < height * width; ++i) {
-		unsigned char bytes[3];
-		float2bytes(bytes, image + 3 * i, 3);
-		fwrite(bytes, sizeof(bytes[0]), 3, fp);
-	}
-	fclose(fp);
-}
-
 int
 main(int argc, char **argv)
 {
@@ -347,17 +340,6 @@ main(int argc, char **argv)
 	int provided;
 	int size;
 	int rank;
-	MPI_Status status;
-
-	int line;
-	float *row;
-	struct sphere *spheres;
-
-	unsigned int width = 1280;
-	unsigned int height = 1024;
-	unsigned int nspheres = 100;
-
-	/* Init MPI */
 	MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -365,17 +347,42 @@ main(int argc, char **argv)
 	/* Seed random generator with lucky number */
 	srand(13);
 
-	spheres = generate_scene(nspheres, width, height);
-	row = malloc(3 * width * sizeof(*row));
+	unsigned int width = 1280;
+	unsigned int height = 1024;
+	float width_inverse = 1 / (float) width;
+	float height_inverse = 1 / (float) height;
+	float fov = 30;
+	float aspect_ratio = width / (float) height;
+	float angle = tan(M_PI * 0.5 * fov / 180.0);
+
+	unsigned int nspheres = 100;
+	struct sphere spheres[nspheres];
+	MPI_Status status;
+
+	/*
+	std::vector<Sphere> spheres;
+	if (rank == 0) {
+			generate_scene(spheres, nbSpheres, width, height, invWidth, invHeight,
+										 aspect_ratio, angle);
+	}
+	
+	MPI_Bcast(spheres.data(), 3*nbSpheres, MPI_FLOAT, 0, MPI_COMM_WORLD);
+	*/	
+	generate_scene(spheres, nspheres, width, height, width_inverse, height_inverse, aspect_ratio, angle);
+	printf("GENERATED!\n");
+	int line;
+	float *row = malloc(3 * 1280 * sizeof(*row));
 	if (rank == 0) {
 		/* Thy bidding, master? */
-		unsigned int x;
+		FILE * fp;
 		unsigned int slave;
+		unsigned int x;
+		/*float image[3 * width * height];*/
+		unsigned char colour_bytes[3];
 		float *image = malloc(3 * width * height * sizeof(*image));
 
 		/* Send initial tasks */
 		for (line = 0; line < size - 1 && line < height; ++line) {
-			printf("SENT LINE %u!\n", line);
 			MPI_Send(&line, 1, MPI_INT, line + 1, 0, MPI_COMM_WORLD); 
 		}
 		for (; line < height; ++line) {
@@ -392,31 +399,43 @@ main(int argc, char **argv)
 		/* Signal work done */
 
 		for (slave = 1; slave < size; ++slave) {
+			/* Wait to recieve last piece of work from slaves */
 			MPI_Recv(row, 3*width, MPI_FLOAT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 
 			/* Memcpy the received stuff */
 			for (x = 0; x < width; ++x)
 				image[status.MPI_TAG * width + x] = row[x];
 
-			/* Send height to put slave to rest */
+			/* Send height to put slaves to rest */
 			MPI_Send(&height, 1, MPI_INT, slave, status.MPI_SOURCE, MPI_COMM_WORLD);
 		}
-		save_ppm("untitled.ppm", image, height, width);
 
+		/* Save picture */
+		fopen("untitled.ppm", "wb");
+		fprintf(fp, "P6\n%u %u\n255\n", width, height);
+
+		for (i = 0; i < width * height; ++i) 
+				floats2bytes(colour_bytes, image + 3 * i, 3);	
+				n = fwrite(colour_bytes, sizeof(*colour_bytes), 3,  fp);
+		}
+		fclose(fp);
+		
 		/* Deallocate */
 		free(image);
-
 	} else {
 		/* Work, work */
-		while (MPI_Recv(&line, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status), line < height) {
-			calculate_line(row, spheres, nspheres, line, width, height, width_inverse, height_inverse, angle, aspect_ratio);
-			MPI_Send(row, 3*width, MPI_FLOAT, 0, line, MPI_COMM_WORLD); 
-		}
+		do {
+			MPI_Recv(&line, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+			//std::cout << "Got line " << line << std::endl;
+			if (line < height) {
+				calculate_line(row, spheres, nspheres, line, width, height, width_inverse, height_inverse, angle, aspect_ratio);
+				MPI_Send(row, 3*width, MPI_FLOAT, 0, line, MPI_COMM_WORLD); 
+			}
+		} while(line < height);
 	}
 	/* Deallocate */
 	free(row);
 
-	/* Deinit MPI */
 	MPI_Finalize();
 	return 0;
 }
@@ -443,16 +462,16 @@ max(float lhs, float rhs)
 int
 trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *spheres, unsigned int nspheres, int depth)
 {
-	unsigned int i;
-	float hit_point[N];
-	float hit_normal[N];
-
-
+	int i;
 	struct sphere *sphere = NULL;
 	float distance = INFINITY;
+	float hit_point[N];
+	float hit_normal[N];
 	float bias = 1e-4;
 
-	set_colour(colour, 0.0, 0.0, 0.0);
+	colour[0] = 0.0;
+	colour[1] = 0.0;
+	colour[2] = 0.0;
 
 	for (i = 0; i < nspheres; ++i) {
 		float entry;
@@ -462,19 +481,16 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 				entry = exit;
 
 			if (entry < distance) {
-				sphere = spheres + i;
+				sphere = &sphere[i];
 				distance = entry;
 			}
 		}
 	}
 	if (!sphere)
 		return 0;
-
 	/* Construct hit point and hit normal */
 	construct(hit_point, ray_origin, ray_dir, distance);
-	printf("SUB2\n");
 	sub(hit_normal, hit_point, sphere->center);
-	printf("~SUB2\n");
 
 	// if the object material is glass, split the ray into a reflection
 	// and a refraction ray.
@@ -516,31 +532,27 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 		/* Find lights */
 		for (i = 0; i < nspheres; ++i) {
 			if (is_light(spheres[i].emission_colour)) {
-				unsigned int j;
+				int j;
 				float transmission_factor;
 				float light_origin[N];
 				float light_dir[N];
 				
 				construct(light_origin, hit_point, hit_normal, bias);
-				printf("SUB3\n");
 				sub(light_dir, spheres[i].center, hit_point);
-				printf("~SUB3\n");
 				normalize(light_dir);
-
 				transmission_factor = dot(hit_normal, light_dir);
-				if (transmission_factor > 0 && ray_reaches(light_origin, light_dir, i, spheres, nspheres))
-					construct(colour, colour, spheres[i].emission_colour, transmission_factor);
+				if (transmission_factor < 0)
+					continue;
+
+				for (j = 0; j < nspheres; ++j) {
+					if (i != j && intersect(light_origin, light_dir, &sphere[j], NULL, NULL)) {
+						transmission_factor = 0;
+						break;
+					}
+				}
+				construct(colour, colour, spheres[i].emission_colour, transmission_factor);
 			}
 		} 
 	}
-}
+} 
 
-int
-ray_reaches(float origin[], float dir[], unsigned int i, struct sphere *spheres, unsigned int nspheres)
-{
-	unsigned int j;
-	for (j = 0; j < nspheres; ++j)
-		if (i != j && intersect(origin, dir, spheres + j, NULL, NULL))
-			return 0;
-	return 1;
-}
