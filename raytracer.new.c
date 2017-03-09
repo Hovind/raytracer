@@ -411,10 +411,8 @@ main(int argc, char **argv)
 	} else {
 		/* Work, work */
 		while (MPI_Recv(&line, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status), line < height) {
-			printf("Got line %u\n", line);
 			calculate_line(row, spheres, nspheres, line, width, height, width_inverse, height_inverse, angle, aspect_ratio);
 			MPI_Send(row, 3*width, MPI_FLOAT, 0, line, MPI_COMM_WORLD); 
-			printf("Sent line %u\n", line);
 		}
 	}
 	/* Deallocate */
@@ -482,6 +480,7 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 	// if the object material is glass, split the ray into a reflection
 	// and a refraction ray.
 	if ((sphere->transparency > 0 || sphere->reflection > 0) && depth < MAX_RAY_DEPTH) {
+		printf("ON DEPTH %u!\n", depth);
 		/* Compute reflection */
 		float refraction_colour[3];
 		float reflection_colour[3];
