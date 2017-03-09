@@ -218,16 +218,17 @@ randomf_in_range(float min, float max)
 }
 
 struct sphere *
-generate_scene(int nspheres, unsigned int width, unsigned int height)
+generate_scene(int nspheres, unsigned int width, unsigned int height, float *width_inverse, float *height_inverse, float *fov, float *aspect_ratio, float *angle)
 {
 	unsigned int i;
 	float radius;
 	struct sphere *spheres = malloc(nspheres * sizeof(*spheres));
-	float width_inverse = 1 / (float) width;
-	float height_inverse = 1 / (float) height;
-	float fov = 30.0;
-	float aspect_ratio = width / (float) height;
-	float angle = tan(M_PI * 0.5 * fov / 180.0);
+
+	*width_inverse = 1 / (float) width;
+	*height_inverse = 1 / (float) height;
+	*fov = 30.0;
+	*aspect_ratio = width / (float) height;
+	*angle = tan(M_PI * 0.5 * fov / 180.0);
 	
 	/* Generate world sphere */
 	spheres[0].center[0] = 0.0;
@@ -352,6 +353,12 @@ main(int argc, char **argv)
 	int line;
 	float *row;
 	struct sphere *spheres;
+	
+	float width_inverse;
+	float height_inverse;
+	float fov;
+	float aspect_ratio;
+	float angle;
 
 	unsigned int width = 1280;
 	unsigned int height = 1024;
@@ -365,7 +372,7 @@ main(int argc, char **argv)
 	/* Seed random generator with lucky number */
 	srand(13);
 
-	spheres = generate_scene(nspheres, width, height);
+	spheres = generate_scene(nspheres, width, height, width_inverse, height_inverse, fov, aspect_ratio, angle);
 	row = malloc(3 * width * sizeof(*row));
 	if (rank == 0) {
 		/* Thy bidding, master? */
