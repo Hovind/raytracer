@@ -501,7 +501,13 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 			/* Refraction origin is the hit point of ray */
 			float refraction_origin[N];
 			float refraction_dir[N];
-			int inside = 1;
+			float facing_ratio = -dot(ray_dir, hit_normal);
+			int inside = 0;
+
+			if (facing_ratio < 0) {
+				scale(hit_normal, -1.0);
+				inside = 1;
+			}
 
 			construct(refraction_origin, hit_point, hit_normal, -1.0 * bias);
 			construct_refraction_dir(refraction_dir, ray_dir, hit_normal, inside);
@@ -511,6 +517,11 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 
 		/* Calculate fresnel effect */
 		fresnel_effect = fresnel(hit_normal, ray_dir, 0.1);
+		printf("reflection: ");
+		print(reflection_colour);
+		printf(" refraction: ");
+		print(refraction_colour);
+		printf("\n");
 		mix(colour, reflection_colour, refraction_colour, fresnel_effect);
 	} else {
 		printf("FOUND OPAQUE!\n");
