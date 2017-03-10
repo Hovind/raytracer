@@ -21,7 +21,6 @@ print(float src[])
         size_t i;
         for (i = 0; i < N; ++i)
                 printf("%f ", src[i]);
-        printf("\n");
 }
 
 void
@@ -116,6 +115,14 @@ set_colour(float colour[], float r, float g, float b)
 }
 
 void
+mul_colours(float res[], float lhs[], float rhs[])
+{
+	size_t i;
+	for (i = 0; i < 3; ++i)
+		res[i] = lhs[i] * rhs[i];
+}
+
+void
 construct(float res[], float origin[], float dir[], float length)
 {
         float tmp[N];
@@ -178,30 +185,6 @@ intersect(float origin[], float dir[], struct sphere *sphere, float *entry, floa
 	
 	return 1;
 }
-
-/*
-int
-find_first_intersection(struct sphere *spheres, unsgined int nspheres, float origin[], float dir[], struct sphere *intersected_sphere, float *intersected_entry) {	
-	float entry;
-	float exit;
-	int ret = 0;
-
-	*intersected_entry = INFINITY;
-	for (i = 0; i < nspheres; ++i) {
-		if (intersect(spheres[i], origin, dir, &entry, &exit)) {
-			if (entry < 0)
-				entry = exit;
-	
-			if (entry < *intersected_entry) {
-				// We have found a "new first intersection" 
-				ret = 1;
-				*intersected_entry = entry;
-				intersected_sphere = &spheres[i];
-			}
-		}
-	}
-	return ret;
-}*/
 
 float
 randomf(void)
@@ -486,7 +469,6 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 		inside = 1;
 	}
 	if ((sphere->transparency > 0 || sphere->reflection > 0) && depth < MAX_RAY_DEPTH) {
-		printf("Depth: %u\n", depth);
 		/* Compute reflection */
 		float refraction_colour[3];
 		float reflection_colour[3];
@@ -534,18 +516,18 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 
 				transmission_factor = dot(hit_normal, light_dir);
 				if (transmission_factor > 0 && ray_reaches(light_origin, light_dir, i, spheres, nspheres)) {
-					
-					print(colour);
-					printf(" + ");
-					print(spheres[i].emission_colour);
-					printf(" * %f = ", transmission_factor);
-					construct(colour, colour, spheres[i].emission_colour, transmission_factor);
+					float product_colour[N];
+					mul_colours(product_colour, sphere->surface_colour,
+					spheres[i].emission_colour);
+					construct(colour, colour, product_colour, transmission_factor);
+					printf("colour: ");
 					print(colour);
 					printf("\n");
 				}
 			}
 		} 
 	}
+	add(colour, colour, sphere->emission_colour);
 }
 
 int
@@ -553,9 +535,7 @@ ray_reaches(float origin[], float dir[], unsigned int i, struct sphere *spheres,
 {
 	unsigned int j;
 	for (j = 0; j < nspheres; ++j)
-		if (i != j && intersect(origin, dir, spheres + j, NULL, NULL)) {
-			printf("Interrupted %u %u!\n", i, j);
+		if (i != j && intersect(origin, dir, spheres + j, NULL, NULL))
 			return 0;
-		}
 	return 1;
 }
