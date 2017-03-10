@@ -288,6 +288,9 @@ calculate_line(float *row, struct sphere *spheres, unsigned int nspheres, unsign
 
 		/* Trace ray */	
 		trace(row, origin, dir, spheres, nspheres, 0);
+		printf("(x, y) = (%f, %f) = ");
+		print(row);
+		printf("\n");
 	}
 }
 
@@ -366,7 +369,7 @@ main(int argc, char **argv)
 			MPI_Send(&line, 1, MPI_INT, line + 1, 0, MPI_COMM_WORLD); 
 
 		for (; line < height; ++line) {
-			MPI_Recv(row, 3*width, MPI_FLOAT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+			MPI_Recv(row, 3 * width, MPI_FLOAT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 
 			/* Memcpy the received stuff */
 			memcpy(image + 3 * status.MPI_TAG * width, row, 3 * width * sizeof(*image));
@@ -378,7 +381,7 @@ main(int argc, char **argv)
 		/* Signal work done */
 
 		for (slave = 1; slave < size; ++slave) {
-			MPI_Recv(row, 3*width, MPI_FLOAT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+			MPI_Recv(row, 3 * width, MPI_FLOAT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 
 			/* Memcpy the received stuff */
 			memcpy(image + 3 * status.MPI_TAG * width, row, 3 * width * sizeof(*image));
