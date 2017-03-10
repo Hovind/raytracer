@@ -5,7 +5,7 @@
 #include <mpi.h>
 
 #define N 3
-#define MAX_RAY_DEPTH 0
+#define MAX_RAY_DEPTH 2
 
 #define SET_COLOUR(colour, r, g, b) { colour[0] = r; colour[1] = g; colour[2] = b; }
 
