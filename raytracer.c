@@ -531,9 +531,6 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 				construct(light_origin, hit_point, hit_normal, bias);
 				sub(light_dir, spheres[i].center, hit_point);
 				normalize(light_dir);
-				printf("light_dir: ");
-				print(light_dir);
-				printf("\n");
 
 				transmission_factor = dot(hit_normal, light_dir);
 				if (transmission_factor > 0 && ray_reaches(light_origin, light_dir, i, spheres, nspheres)) {
