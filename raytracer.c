@@ -5,7 +5,7 @@
 #include <mpi.h>
 
 #define N 3
-#define MAX_RAY_DEPTH 0
+#define MAX_RAY_DEPTH 5
 
 #define SET_COLOUR(colour, r, g, b) { colour[0] = r; colour[1] = g; colour[2] = b; }
 
@@ -56,7 +56,6 @@ length_squared(float vec[])
 	return dot(vec, vec);
 }
 
-
 float
 length(float vec[])
 {
@@ -92,9 +91,9 @@ mix(float res[], float lhs[], float rhs[], float mix)
 }
 
 float
-fresnel(float hit_normal[], float ray_dir[], float a)
+fresnel(float facing_ratio, float a)
 {
-	return mixf(pow(1.0 + dot(ray_dir, hit_normal), 3), 1.0, a);
+	return mixf(1.0, pow(1.0 - facing_ratio, 3), a);
 }
 
 void
@@ -366,11 +365,11 @@ main(int argc, char **argv)
 	size_t height = 1024;
 	unsigned int nspheres = 100;
 
-	/* Init MPI */
-	MPI_Init_context(&argc, &argv, &context);
-
 	/* Seed random generator with lucky number */
 	srand(13);
+
+	/* Init MPI */
+	MPI_Init_context(&argc, &argv, &context);
 
 	/* Configure screen according to image size size, generate n spheres */
 	spheres = generate_scene(nspheres, width, height, &screen);
@@ -498,11 +497,13 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 		float reflection_dir[N];
 
 		float fresnel_effect;
+		float facing_ratio = - 1.0 * dot(ray_dir, hit_normal);
 
 		construct(reflection_origin, hit_point, hit_normal, bias);
-		construct(reflection_dir, ray_dir, hit_normal, -2.0 * dot(ray_dir, hit_normal));
+		construct(reflection_dir, ray_dir, hit_normal, 2.0 * facing_ratio);
 
 		trace(reflection_colour, reflection_origin, reflection_dir, spheres, nspheres, depth + 1);
+		set_colour(refraction_colour, 0.0, 0.0, 0.0);
 
 		/* Compute refraction */
 		if (sphere->transparency) {
@@ -517,8 +518,9 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 		}
 
 		/* Calculate fresnel effect */
-		fresnel_effect = fresnel(hit_normal, ray_dir, 0.1);
+		fresnel_effect = fresnel(facing_ratio, 0.3);
 		mix(colour, reflection_colour, refraction_colour, fresnel_effect);
+		mul_colours(colour, colour, sphere->surface_colour);
 	} else {
 		// object is a diffuse opaque object
 		// compute illumination
