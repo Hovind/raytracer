@@ -283,7 +283,10 @@ x2xworld(unsigned int x, struct screen_config screen)
 	return screen.angle * screen.aspect_ratio * c2cworld(x, screen.width_inverse);
 }
 
-struct const_segment_args {
+struct segment_args {
+	float *row;
+	size_t i;
+	pthread_mutex_t m;
 	size_t segment_length;
 	float yworld;
 	struct sphere *spheres;
@@ -291,16 +294,11 @@ struct const_segment_args {
 	struct screen_config screen;
 };
 
-struct segment_args {
-	float *row;
-	size_t x_start;
-	struct const_segment_args *cargs;
-};
-
 void *
 calculate_segment(void *vargs)
 {
 	struct segment_args *args;
+	size_t j;
 	size_t x;
 	float xworld;
 
@@ -311,47 +309,44 @@ calculate_segment(void *vargs)
 	args = vargs;
 
 
-	printf("x_start %u.\n", args->x_start);
-	for (x = args->x_start; x < args->x_start + args->cargs->segment_length; ++x,
-	args->row += 3) {
-		xworld = x2xworld(x, args->cargs->screen);
-		set_vecNf(dir, xworld, args->cargs->yworld, -1.0);
+	pthread_mutex_lock(&args->m);
+	j = args->i++;
+	pthread_mutex_unlock(&args->m);
+
+	
+	for (x = j * args->segment_length; x < (j + 1) * args->segment_length; ++x) {
+		xworld = x2xworld(x, args->screen);
+		set_vecNf(dir, xworld, args->yworld, -1.0);
 		normalize(dir);
 
-		trace(args->row, origin, dir, args->cargs->spheres, args->cargs->nspheres, 0);
+		trace(args->row + 3 * j * args->segment_length, origin, dir, args->spheres, args->nspheres, 0);
 	}
-	free(args);
+	pthread_exit(NULL);
 }
 		
 void *
 calculate_line(float *row, size_t y, size_t width, size_t nsegments, struct sphere *spheres, unsigned int nspheres, struct screen_config screen)
 {
-	int err;
 	size_t i;
-	size_t segment_length = width / nsegments;
 
 	pthread_t *threads = malloc(nsegments * sizeof(*threads));
 
 	float yworld = y2yworld(y, screen);
-	struct const_segment_args cargs = {
-		.segment_length = segment_length,
+	struct segment_args args = {
+		.row = row,
+		.i = 0,
+		.segment_length = width / nsegments,
 		.yworld = yworld,
 		.spheres = spheres,
 		.nspheres = nspheres,
 		.screen = screen,
 	};
 
-	for (i = 0; i < nsegments; ++i) {
-		struct segment_args *args = malloc(sizeof(*args));
-		args->row = row + 3 * i * segment_length;
-		args->x_start = i * segment_length;
-		args->cargs = &cargs;
+	for (; i < nsegments; ++i)
+		pthread_create(threads + i, NULL, calculate_segment, &args);
 
-		err = pthread_create(threads + i, NULL, calculate_segment, &args);
-		printf("thread %u.\n", i);
-	}
 	for (i = 0; i < nsegments; ++i)
-		pthread_join(threads + i, NULL);
+		pthread_join(threads[i], NULL);
 
 	free(threads);
 }
@@ -417,7 +412,7 @@ main(int argc, char **argv)
 	size_t width = 1280;
 	size_t height = 1024;
 	unsigned int nspheres = 100;
-	size_t nsegments = 10;
+	size_t nsegments = 2;
 
 	srand(13);
 	MPI_Init_context(&argc, &argv, &context);
