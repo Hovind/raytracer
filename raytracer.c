@@ -10,6 +10,14 @@
 #define SET_COLOUR(colour, r, g, b) { colour[0] = r; colour[1] = g; colour[2] = b; }
 
 void
+set_vecNf(float vec[], float x, float y, float z)
+{
+	vec[0] = x;
+	vec[1] = y;
+	vec[2] = z;
+}
+
+void
 copy(float to[], float src[])
 {
         memcpy(to, src, N*sizeof(src[0]));
@@ -124,10 +132,10 @@ mul_colours(float res[], float lhs[], float rhs[])
 void
 construct(float res[], float origin[], float dir[], float length)
 {
-        float tmp[N];
-        copy(tmp, dir);
-        scale(tmp, length);
-        add(res, origin, tmp);
+	float tmp[N];
+	copy(tmp, dir);
+	scale(tmp, length);
+	add(res, origin, tmp);
 }
 
 void
@@ -264,43 +272,88 @@ float c2cworld(unsigned int c, float measure_inverse)
 }
 
 float
-y2yworld(unsigned int y, float height_inverse, float angle)
+y2yworld(unsigned int y, struct screen_config screen)
 {
-	return -1.0 * angle * c2cworld(y, height_inverse);
+	return -1.0 * screen.angle * c2cworld(y, screen.height_inverse);
 }
 
 float
-x2xworld(unsigned int x, float width_inverse, float angle, float aspect_ratio)
+x2xworld(unsigned int x, struct screen_config screen)
 {
-	return angle * aspect_ratio * c2cworld(x, width_inverse);
+	return screen.angle * screen.aspect_ratio * c2cworld(x, screen.width_inverse);
 }
 
-void
-calculate_line(float *row, struct sphere *spheres, unsigned int nspheres,
-unsigned int y, unsigned int width, unsigned int height, struct screen_config
-screen)
+struct const_segment_args {
+	size_t segment_length;
+	float yworld;
+	struct sphere *spheres;
+	unsigned int nspheres;
+	struct screen_config screen;
+};
+
+struct segment_args {
+	float *row;
+	size_t x_start;
+	struct const_segment_args *cargs;
+};
+
+void *
+calculate_segment(void *vargs)
 {
-	unsigned int x;
+	struct segment_args *args;
+	size_t x;
 	float xworld;
-	float yworld = y2yworld(y, screen.height_inverse, screen.angle);
-	float origin[N] = {0.0, 0.0, 0.0};
+
+	float origin[N];
 	float dir[N];
 
-	for (x = 0; x < width; ++x, row += 3) {
-		xworld = x2xworld(x, screen.width_inverse, screen.angle, screen.aspect_ratio);
-			
-		/* Get direction of ray from camera */
-		dir[0] = xworld;
-		dir[1] = yworld;
-		dir[2] = -1.0;
+	set_vecNf(origin, 0.0, 0.0, 0.0);
+	args = vargs;
+
+
+	printf("x_start %u.\n", args->x_start);
+	for (x = args->x_start; x < args->x_start + args->cargs->segment_length; ++x,
+	args->row += 3) {
+		xworld = x2xworld(x, args->cargs->screen);
+		set_vecNf(dir, xworld, args->cargs->yworld, -1.0);
 		normalize(dir);
 
-		/* Trace ray */	
-		trace(row, origin, dir, spheres, nspheres, 0);
-		//printf("(x, y) = (%f, %f) = ");
-		//print(row);
-		//printf("\n");
+		trace(args->row, origin, dir, args->cargs->spheres, args->cargs->nspheres, 0);
 	}
+	free(args);
+}
+		
+void *
+calculate_line(float *row, size_t y, size_t width, size_t nsegments, struct sphere *spheres, unsigned int nspheres, struct screen_config screen)
+{
+	int err;
+	size_t i;
+	size_t segment_length = width / nsegments;
+
+	pthread_t *threads = malloc(nsegments * sizeof(*threads));
+
+	float yworld = y2yworld(y, screen);
+	struct const_segment_args cargs = {
+		.segment_length = segment_length,
+		.yworld = yworld,
+		.spheres = spheres,
+		.nspheres = nspheres,
+		.screen = screen,
+	};
+
+	for (i = 0; i < nsegments; ++i) {
+		struct segment_args *args = malloc(sizeof(*args));
+		args->row = row + 3 * i * segment_length;
+		args->x_start = i * segment_length;
+		args->cargs = &cargs;
+
+		err = pthread_create(threads + i, NULL, calculate_segment, &args);
+		printf("thread %u.\n", i);
+	}
+	for (i = 0; i < nsegments; ++i)
+		pthread_join(threads + i, NULL);
+
+	free(threads);
 }
 
 float
@@ -343,7 +396,7 @@ typedef struct {
 void
 MPI_Init_context(int *argc, char ***argv, MPI_Context *context)
 {	
-	MPI_Init_thread(argc, argv, MPI_THREAD_MULTIPLE, &context->provided);
+	MPI_Init_thread(argc, argv, MPI_THREAD_FUNNELED, &context->provided);
 	MPI_Comm_size(MPI_COMM_WORLD, &context->size);
 	MPI_Comm_rank(MPI_COMM_WORLD, &context->rank);
 }
@@ -364,55 +417,39 @@ main(int argc, char **argv)
 	size_t width = 1280;
 	size_t height = 1024;
 	unsigned int nspheres = 100;
+	size_t nsegments = 10;
 
-	/* Seed random generator with lucky number */
 	srand(13);
-
-	/* Init MPI */
 	MPI_Init_context(&argc, &argv, &context);
 
-	/* Configure screen according to image size size, generate n spheres */
 	spheres = generate_scene(nspheres, width, height, &screen);
 	row = malloc(3 * width * sizeof(*row));
+
 	if (context.rank == 0) {
-		/* Thy bidding, master? */
-		unsigned int slave;
+		size_t slave;
 		float *image = malloc(3 * width * height * sizeof(*image));
 
-		/* Send initial tasks */
 		for (line = 0; line < context.size - 1 && line < height; ++line)
 			MPI_Send(&line, 1, MPI_INT, line + 1, 0, MPI_COMM_WORLD); 
 
 		for (; line < height; ++line) {
 			MPI_Recv(row, 3 * width, MPI_FLOAT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-
-			/* Memcpy the received stuff */
 			memcpy(image + 3 * status.MPI_TAG * width, row, 3 * width * sizeof(*image));
-
-			/* Send more work */
 			MPI_Send(&line, 1, MPI_INT, status.MPI_SOURCE, 0, MPI_COMM_WORLD);
 		}
 
-		/* Signal work done */
-
 		for (slave = 1; slave < context.size; ++slave) {
 			MPI_Recv(row, 3 * width, MPI_FLOAT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-
-			/* Memcpy the received stuff */
 			memcpy(image + 3 * status.MPI_TAG * width, row, 3 * width * sizeof(*image));
-
-			/* Send height to put slave to rest */
 			MPI_Send(&height, 1, MPI_INT, slave, status.MPI_SOURCE, MPI_COMM_WORLD);
 		}
 		save_ppm("untitled.ppm", image, width, height);
-
-		/* Deallocate */
 		free(image);
 
 	} else {
 		/* Work, work */
 		while (MPI_Recv(&line, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status), line < height) {
-			calculate_line(row, spheres, nspheres, line, width, height, screen);
+			calculate_line(row, line, width, nsegments, spheres, nspheres, screen);
 			MPI_Send(row, 3*width, MPI_FLOAT, 0, line, MPI_COMM_WORLD); 
 		}
 	}
@@ -433,6 +470,16 @@ is_light(float colour[])
 	for (i = 0; i < 3; ++i)
 		sum += colour[i];
 	return sum > 0;
+}
+
+int
+ray_reaches(float origin[], float dir[], unsigned int i, struct sphere *spheres, unsigned int nspheres)
+{
+	unsigned int j;
+	for (j = 0; j < nspheres; ++j)
+		if (i != j && intersect(origin, dir, spheres + j, NULL, NULL))
+			return 0;
+	return 1;
 }
 
 float
@@ -548,14 +595,4 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 		} 
 	}
 	add(colour, colour, sphere->emission_colour);
-}
-
-int
-ray_reaches(float origin[], float dir[], unsigned int i, struct sphere *spheres, unsigned int nspheres)
-{
-	unsigned int j;
-	for (j = 0; j < nspheres; ++j)
-		if (i != j && intersect(origin, dir, spheres + j, NULL, NULL))
-			return 0;
-	return 1;
 }
