@@ -318,10 +318,10 @@ calculate_segment(void *vargs)
 		xworld = x2xworld(x, args->screen);
 		set_vecNf(dir, xworld, args->yworld, -1.0);
 		normalize(dir);
-
+		
+		printf("x = %u xw = %f yw = %f\n", x, xworld, args->yworld);
 		trace(args->row + 3 * j * args->segment_length, origin, dir, args->spheres, args->nspheres, 0);
 	}
-	pthread_exit(NULL);
 }
 		
 void *
@@ -342,7 +342,7 @@ calculate_line(float *row, size_t y, size_t width, size_t nsegments, struct sphe
 		.screen = screen,
 	};
 
-	for (; i < nsegments; ++i)
+	for (i = 0; i < nsegments; ++i)
 		pthread_create(threads + i, NULL, calculate_segment, &args);
 
 	for (i = 0; i < nsegments; ++i)
