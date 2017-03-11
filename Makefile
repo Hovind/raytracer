@@ -1,14 +1,21 @@
+CC=mpicc
 CXX=mpic++
 ifeq ($(DEBUG),yes)
 	CXXFLAGS=-std=c++11 -g -fopenmp -pthread -Wall -pedantic
-	LDFLAGS= -pthread -lm
 else
 	CXXFLAGS=-std=c++11 -O3 -march=native -fopenmp -pthread -Wall -pedantic
-	LDFLAGS= -pthread -lm
 endif
+
+CFLAGS=-std=c99 -fopenmp -pthread -Wall -Wextra -pedantic #-Ofast -march=native 
+LDFLAGS= -pthread -lm -pg
+
 EXEC= raytracer.exe
 SRC= raytracer.cpp
-OBJ= $(SRC: .cpp=.o)
+OBJ= $(SRC:.cpp=.cpp.o)
+
+BIN = raytracer
+CSRC = raytracer.c
+COBJ = $(CSRC:.c=.c.o)
 
 all: $(EXEC)
 ifeq ($(DEBUG),yes)
@@ -17,10 +24,16 @@ else
 	@echo "Génération en mode production"
 endif
 
-raytracer.exe: $(OBJ)
+$(BIN): $(COBJ)
+	@$(CC) -o $@ $^ $(LDFLAGS)
+
+$(COBJ): $(CSRC)
+	@$(CC) -o $@ -c $< $(CFLAGS)
+
+$(EXEC): $(OBJ)
 	@$(CXX) -o $@ $^ $(LDFLAGS)
 
-%.o : %.cpp
+$(OBJ): $(SRC)
 	@$(CXX) -o $@ -c $< $(CXXFLAGS)
 
 .PHONY: clean cleanall

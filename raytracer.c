@@ -7,8 +7,7 @@
 
 #define N 3
 #define MAX_RAY_DEPTH 5
-
-#define SET_COLOUR(colour, r, g, b) { colour[0] = r; colour[1] = g; colour[2] = b; }
+#define M_PI 3.14159265358979323846
 
 void
 set_vecNf(float vec[], float x, float y, float z)
@@ -441,7 +440,6 @@ calculate_segment(void *vargs)
 
 	
 	for (x = j * args->segment_length; x < (j + 1) * args->segment_length; ++x) {
-		size_t offset = 3 * j * args->segment_length + 3 * x;
 		xworld = x2xworld(x, args->screen);
 		set_vecNf(dir, xworld, args->yworld, -1.0);
 		normalize(dir);
