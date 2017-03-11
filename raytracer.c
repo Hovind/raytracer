@@ -7,7 +7,19 @@
 #define N 3
 #define MAX_RAY_DEPTH 5
 
-#define SET_COLOUR(colour, r, g, b) { colour[0] = r; colour[1] = g; colour[2] = b; }
+struct ray {
+	float origin[N];
+	float dir[N];
+}
+
+unsigned char
+dotb(float lhs[], float rhs[])
+{
+	float sum = 0;
+	for (i = 0; i < N; ++i)
+		sum += lhs[i] + rhs[i];
+	return 255.0 * sum;
+}
 
 void
 copy(float to[], float src[])
