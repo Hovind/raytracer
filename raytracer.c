@@ -8,9 +8,10 @@
 #define N 3
 #define MAX_RAY_DEPTH 5
 #define M_PI 3.14159265358979323846
+#define BIAS 1e-4
 
 void
-set_vecNf(float vec[], float x, float y, float z)
+set_vec(float vec[], float x, float y, float z)
 {
 	vec[0] = x;
 	vec[1] = y;
@@ -345,8 +346,16 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 		return 0;
 	}
 	set_colour(colour, 0.0, 0.0, 0.0);
+	/*if (find_first_intersection(&distance, camera_ray, spheres, nspheres)) {
+		set_colour(colour, 2.0, 2.0, 2.0);
+		return 0;
+	} else {
+		set_colour(colour, 2.0, 2.0, 2.0);
+	}*/
+		
 
 	/* Construct hit point and hit normal */
+	/*construct_normal_unit_ray(camera_ray, distance);*/
 	construct(hit_point, ray_origin, ray_dir, distance);
 	sub(hit_normal, hit_point, sphere->center);
 	normalize(hit_normal);
@@ -356,15 +365,29 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 		scale(hit_normal, -1.0);
 		inside = 1;
 	}
+	/*inside = flip_ray_if_inside(&hit_normal_ray, camera_ray); */
 	// if the object material is glass, split the ray into a reflection
 	// and a refraction ray.
 	if ((sphere->transparency > 0 || sphere->reflection > 0) && depth < MAX_RAY_DEPTH) {
 		/* Compute reflection */
 		float refraction_colour[3];
 		float reflection_colour[3];
+		
+		/**/
 
 		float reflection_origin[N];
 		float reflection_dir[N];
+
+		/*unsigned char refraction_colour[3];
+		unsigned char reflection_colour[3];
+		struct ray reflection_ray;
+		struct ray reflection_ray;
+		set_colour(refraction_colour, 0.0, 0.0, 0.0);
+		set_colour(reflection_colour, 0.0, 0.0, 0.0);
+
+		construct_reflection_ray(hit_point, hit_normal, bias); ...
+		trace();
+		scale_colour(relfection_colour, fresnel_effect)*/
 
 		float fresnel_effect;
 		float facing_ratio = - 1.0 * dot(ray_dir, hit_normal);
@@ -380,6 +403,10 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 			/* Refraction origin is the hit point of ray */
 			float refraction_origin[N];
 			float refraction_dir[N];
+			/*struct reflection_ray;
+			construct_reflection_ray();
+			trace();
+			scale_colour(refraction_colour, (1.0 - fresnel_effect) * sphere->transparency);*/
 
 			construct(refraction_origin, hit_point, hit_normal, -1.0 * bias);
 			construct_refraction_dir(refraction_dir, ray_dir, hit_normal, inside);
@@ -388,13 +415,12 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 		}
 
 		/* Calculate fresnel effect */
+		/*add_colours(colour, reflection_colour, refraction_colour);
+		mul_colours(colour, sphere->surface_colour);*/
 		fresnel_effect = fresnel(facing_ratio, 0.1);
 		mix(colour, reflection_colour, refraction_colour, fresnel_effect);
 		mul_colours(colour, colour, sphere->surface_colour);
 	} else {
-		// object is a diffuse opaque object
-		// compute illumination
-
 		/* Find lights */
 		for (i = 0; i < nspheres; ++i) {
 			if (is_light(spheres[i].emission_colour)) {
@@ -402,6 +428,7 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 				float light_origin[N];
 				float light_dir[N];
 				
+				/*construct_light_unit_ray(); */
 				construct(light_origin, hit_point, hit_normal, bias);
 				sub(light_dir, spheres[i].center, hit_point);
 				normalize(light_dir);
@@ -431,7 +458,7 @@ calculate_segment(void *vargs)
 	float origin[N];
 	float dir[N];
 
-	set_vecNf(origin, 0.0, 0.0, 0.0);
+	set_vec(origin, 0.0, 0.0, 0.0);
 	args = vargs;
 
 	pthread_mutex_lock(&args->m);
