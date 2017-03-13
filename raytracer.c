@@ -10,7 +10,7 @@
 #define M_PI 3.14159265358979323846
 
 void
-set_vecNf(float vec[], float x, float y, float z)
+set_vec(float vec[], float x, float y, float z)
 {
 	vec[0] = x;
 	vec[1] = y;
@@ -457,7 +457,7 @@ calculate_segment(void *vargs)
 	float origin[N];
 	float dir[N];
 
-	set_vecNf(origin, 0.0, 0.0, 0.0);
+	set_vec(origin, 0.0, 0.0, 0.0);
 	args = vargs;
 
 	pthread_mutex_lock(&args->m);
@@ -468,7 +468,7 @@ calculate_segment(void *vargs)
 	for (x = j * args->segment_length; x < (j + 1) * args->segment_length; ++x) {
 		float colour[3];
 		xworld = x2xworld(x, args->screen);
-		set_vecNf(dir, xworld, args->yworld, -1.0);
+		set_vec(dir, xworld, args->yworld, -1.0);
 		normalize(dir);
 		trace(colour, origin, dir, args->spheres, args->nspheres, 0);
 		float2bytes(args->row + 3 * x, colour, 3);
@@ -542,10 +542,19 @@ main(int argc, char **argv)
 	struct sphere *spheres;	
 	struct screen_config screen;
 
+	size_t nsegments;
 	size_t width = 1280;
 	size_t height = 1024;
 	unsigned int nspheres = 100;
-	size_t nsegments = 2;
+	
+	if (argc > 2) {
+		printf("Raytracer takes one argument, number of threads. By default it is 1.\n");
+		return 0;
+	} else if (argc > 1) {
+		nsegments = atoi(argv[1]);
+	} else {
+		nsegments = 1;
+	}
 
 	srand(13);
 	MPI_Init_context(&argc, &argv, &context);
