@@ -1,0 +1,40 @@
+threads	1
+real	0m3.891s
+user	0m15.081s
+sys	0m0.120s
+
+threads	2
+real	0m2.697s
+user	0m15.505s
+sys	0m0.104s
+
+threads	3
+real	0m1.471s
+user	0m17.325s
+sys	0m0.192s
+
+threads	4
+real	0m1.404s
+user	0m19.701s
+sys	0m0.172s
+
+threads	5
+real	0m2.316s
+user	0m22.197s
+sys	0m0.256s
+
+threads	6
+real	0m1.210s
+user	0m23.421s
+sys	0m0.312s
+
+threads	7
+real	0m2.195s
+user	0m25.646s
+sys	0m0.388s
+
+threads	8
+real	0m2.258s
+user	0m25.378s
+sys	0m0.492s
+
