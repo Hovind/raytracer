@@ -87,7 +87,7 @@ normalize(float vec[])
 float
 mixf(float a, float b, float mix)
 {
-    return b * mix + a * (1.0 - mix);
+    return a * mix + b * (1.0 - mix);
 }
 
 void
@@ -205,6 +205,32 @@ randomf_in_range(float min, float max)
 	return randomf() * (max - min) + min;
 }
 
+float
+min(float lhs, float rhs)
+{
+	if (lhs < rhs)
+		return lhs;
+	else
+		return  rhs;
+}
+
+float
+max(float lhs, float rhs)
+{
+	if (lhs > rhs)
+		return lhs;
+	else
+		return  rhs;
+}
+
+void
+float2bytes(unsigned char bytes[], float floats[], size_t n)
+{
+	size_t i;
+	for (i = 0; i < n; ++i)
+		bytes[i] = min(1.0, floats[i]) * 255.0;
+}
+
 struct screen_config {
 	float width_inverse;
 	float height_inverse;
@@ -232,7 +258,7 @@ generate_scene(unsigned int nspheres, unsigned int width, unsigned int height, s
 	spheres[0].center[2] = -20.0;
 	spheres[0].radius2 = 10000.0*10000.0;
 
-	set_colour(spheres[0].surface_colour, 0.8, 0.2, 0.2);
+	set_colour(spheres[0].surface_colour, 0.2, 0.2, 0.2);
 	set_colour(spheres[0].emission_colour, 0.0, 0.0, 0.0);
 
 	spheres[0].transparency = 0.0;
@@ -284,7 +310,7 @@ x2xworld(unsigned int x, struct screen_config screen)
 }
 
 struct segment_args {
-	float *row;
+	unsigned char *row;
 	size_t i;
 	pthread_mutex_t m;
 	size_t segment_length;
@@ -440,16 +466,18 @@ calculate_segment(void *vargs)
 
 	
 	for (x = j * args->segment_length; x < (j + 1) * args->segment_length; ++x) {
+		float colour[3];
 		xworld = x2xworld(x, args->screen);
 		set_vecNf(dir, xworld, args->yworld, -1.0);
 		normalize(dir);
-		trace(args->row + 3 * x, origin, dir, args->spheres, args->nspheres, 0);
+		trace(colour, origin, dir, args->spheres, args->nspheres, 0);
+		float2bytes(args->row + 3 * x, colour, 3);
 	}
 	return NULL;
 }
 		
 void
-calculate_line(float *row, size_t y, size_t width, size_t nsegments, struct sphere *spheres, unsigned int nspheres, struct screen_config screen)
+calculate_line(unsigned char *row, size_t y, size_t width, size_t nsegments, struct sphere *spheres, unsigned int nspheres, struct screen_config screen)
 {
 	size_t i;
 
@@ -475,43 +503,15 @@ calculate_line(float *row, size_t y, size_t width, size_t nsegments, struct sphe
 	free(threads);
 }
 
-float
-min(float lhs, float rhs)
-{
-	if (lhs < rhs)
-		return lhs;
-	else
-		return  rhs;
-}
-
-float
-max(float lhs, float rhs)
-{
-	if (lhs > rhs)
-		return lhs;
-	else
-		return  rhs;
-}
-
 void
-float2bytes(unsigned char bytes[], float floats[], size_t n)
-{
-	size_t i;
-	for (i = 0; i < n; ++i)
-		bytes[i] = min(1.0, floats[i]) * 255.0;
-}
-
-void
-save_ppm(char file_name[], float image[], unsigned int width, unsigned int height)
+save_ppm(char file_name[], unsigned char image[], unsigned int width, unsigned int height)
 {
 	size_t i;
 	FILE *fp = fopen(file_name, "wb");
 	fprintf(fp, "P6\n%u %u\n255\n", width, height);
-	for (i = 0; i < height * width; ++i) {
-		unsigned char bytes[3];
-		float2bytes(bytes, image + 3 * i, 3);
-		fwrite(bytes, sizeof(bytes[0]), 3, fp);
-	}
+	for (i = 0; i < height * width; ++i)
+		fwrite(image + 3 * i, sizeof(image[0]), 3, fp);
+
 	fclose(fp);
 }
 
@@ -538,7 +538,7 @@ main(int argc, char **argv)
 	MPI_Context context;
 
 	size_t line;
-	float *row;
+	unsigned char *row;
 	struct sphere *spheres;	
 	struct screen_config screen;
 
@@ -555,19 +555,19 @@ main(int argc, char **argv)
 
 	if (context.rank == 0) {
 		int slave;
-		float *image = malloc(3 * width * height * sizeof(*image));
+		unsigned char *image = malloc(3 * width * height * sizeof(*image));
 
 		for (line = 0; line < context.size - 1 && line < height; ++line)
 			MPI_Send(&line, 1, MPI_INT, line + 1, 0, MPI_COMM_WORLD); 
 
 		for (; line < height; ++line) {
-			MPI_Recv(row, 3 * width, MPI_FLOAT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+			MPI_Recv(row, 3 * width, MPI_UNSIGNED_CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 			memcpy(image + 3 * status.MPI_TAG * width, row, 3 * width * sizeof(*image));
 			MPI_Send(&line, 1, MPI_INT, status.MPI_SOURCE, 0, MPI_COMM_WORLD);
 		}
 
 		for (slave = 1; slave < context.size; ++slave) {
-			MPI_Recv(row, 3 * width, MPI_FLOAT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+			MPI_Recv(row, 3 * width, MPI_UNSIGNED_CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 			memcpy(image + 3 * status.MPI_TAG * width, row, 3 * width * sizeof(*image));
 			MPI_Send(&height, 1, MPI_INT, slave, status.MPI_SOURCE, MPI_COMM_WORLD);
 		}
@@ -578,7 +578,7 @@ main(int argc, char **argv)
 		/* Work, work */
 		while (MPI_Recv(&line, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status), line < height) {
 			calculate_line(row, line, width, nsegments, spheres, nspheres, screen);
-			MPI_Send(row, 3*width, MPI_FLOAT, 0, line, MPI_COMM_WORLD); 
+			MPI_Send(row, 3*width, MPI_UNSIGNED_CHAR, 0, line, MPI_COMM_WORLD); 
 		}
 	}
 	/* Deallocate */
