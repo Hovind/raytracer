@@ -53,21 +53,24 @@ construct_refraction_unit_ray(struct ray refraction_ray, r_dir);
 int
 intersect(struct ray *r, struct sphere *sphere, float *entry, float *exit)
 {
-	float origin_to_center[N];
-	float origin_to_t_length;
+	struct ray sphere_ray;
+	float sphere_distance;
+	float t_distance;
 	float t_radius2;
-	float surface_to_t_length;
+	float t_to_surface_distance;
 
-	sub(origin_to_center, sphere->center, r->origin);
-	origin_to_t_length = dot(origin_to_center, r->dir);
-	
-	if (origin_to_t_length < 0)
-		 return 0;
+	sphere_ray = construct_sphere_ray(r, sphere);
+	sphere_distance = sphere_ray->length;
+	t_distance = ray_dot(sphere_ray, r);
+	free(sphere_ray);
+
+	if (t_distance) < 0)
+		return 0;
 
 	/* Pythagoras */
-	t_radius2 = length_squared(origin_to_center) - origin_to_t_length * origin_to_t_length;
+	t_radius2 = sphere_distance * sphere_distance - t_distance * t_distance;
 	if (t_radius2 > sphere->radius2)
-		 return 0;
+		return 0;
 
 	surface_to_t_length = sqrt(sphere->radius2 - t_radius2);
 
@@ -79,11 +82,26 @@ intersect(struct ray *r, struct sphere *sphere, float *entry, float *exit)
 	return 1;
 }
 
+void
+set_sphere(struct sphere *sphere, float x, float y, float z, float r, float sr, float sg, float sb, float er, float eg, float eb, float transparency, float reflection)
+{
+	sphere->center[0] = x;
+	sphere->center[1] = y;
+	sphere->center[2] = z;
+	sphere->radius2 = r * r;
+
+	set_colour(sphere->surface_colour, sr, sg, sb);
+	set_colour(sphere->emission_colour, er, eg, eb);
+
+	spheres->transparency = transparency;
+	spheres->reflection = reflection;
+}
+
+
 struct sphere *
 generate_scene(unsigned int nspheres, unsigned int width, unsigned int height, struct screen_config *screen)
 {
 	unsigned int i;
-	float radius;
 	struct sphere *spheres = malloc(nspheres * sizeof(*spheres));
 
 	screen->width_inverse = 1 / (float) width;
@@ -92,42 +110,29 @@ generate_scene(unsigned int nspheres, unsigned int width, unsigned int height, s
 	screen->aspect_ratio = width / (float) height;
 	screen->angle = tanf(M_PI * 0.5 * screen->fov / 180.0);
 	
+
 	/* Generate world sphere */
-	spheres[0].center[0] = 0.0;
-	spheres[0].center[1] = -10004.0;
-	spheres[0].center[2] = -20.0;
-	spheres[0].radius2 = 10000.0*10000.0;
-
-	set_colour(spheres[0].surface_colour, 0.8, 0.2, 0.2);
-	set_colour(spheres[0].emission_colour, 0.0, 0.0, 0.0);
-
-	spheres[0].transparency = 0.0;
-	spheres[0].reflection = 0.0;
+	set_sphere(spheres, 0.0, -10004.0, -20.0, 10000.0, 0.8, 0.2, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0);
 
 	for (i = 1; i + 1 < nspheres; ++i) {
-		spheres[i].center[0] = randomf_in_range(-10.0, 10.0);
-		spheres[i].center[1] = randomf_in_range(-1.0, 1.0);
-		spheres[i].center[2] = randomf_in_range(-25.0, -15.0);
-		radius = randomf_in_range(0.9, 1.0);
-		spheres[i].radius2 = radius*radius;
+		float x = randomf_in_range(-10.0, 10.0);
+		float y = randomf_in_range(-1.0, 1.0);
+		float z = randomf_in_range(-25.0, -15.0);
+		float radius = randomf_in_range(0.9, 1.0);
+		
+		float r = randomf();
+		float g = randomf();
+		float b = randomf();
 
-		set_colour(spheres[i].surface_colour, randomf(), randomf(), randomf());
-		set_colour(spheres[i].emission_colour, 0.0, 0.0, 0.0);
+		float transparency = randomf_in_range(0.0, 0.5);
+		float reflection = 1.0;
 
-		spheres[i].transparency = randomf_in_range(0.0, 0.5);
-		spheres[i].reflection = 1.0;
+		set_sphere(spheres + i, x, y, z, radius, r, g, b, 0.0, 0.0, 0.0, transparency, reflection);
+
 	}
 	/* Add light source */
-	spheres[nspheres - 1].center[0] = 0.0;
-	spheres[nspheres - 1].center[1] = 20.0;
-	spheres[nspheres - 1].center[2] = -30.0;
-	spheres[nspheres - 1].radius2 = 3.0*3.0;
 
-	set_colour(spheres[nspheres - 1].surface_colour, 0.0, 0.0, 0.0);
-	set_colour(spheres[nspheres - 1].emission_colour, 3.0, 3.0, 3.0);
-
-	spheres[nspheres - 1].transparency = 0.0;
-	spheres[nspheres - 1].reflection = 0.0;
+	set_sphere(spheres + nspheres - 1, 0.0, 20.0, -30.0, 3.0, 0.0, 0.0, 0.0, 3.0, 3.0, 3.0, 0.0, 0.0);
 
 	return spheres;
 }
@@ -168,7 +173,7 @@ find_first_intersection(float *distance, struct sphere *sphere, struct ray *came
 		if (intersect(camera_ray, spheres + i, &entry, &exit)) {
 			if (entry < 0)
 				entry = exit;
-	
+
 			if (entry < *distance) {
 				sphere = spheres + i;
 				*distance = entry;
@@ -186,7 +191,7 @@ trace(float colour[], struct ray *r, struct sphere *spheres, unsigned int nspher
 	struct ray hit_normal_ray;
 	float distance;
 
-	if (find_first_intersection(&distance, sphere, camera_ray, spheres, nspheres)) {
+	if (find_first_intersection(&distance, sphere, r, spheres, nspheres)) {
 		set_colour(colour, 2.0, 2.0, 2.0);
 		return 0;
 	}
@@ -194,8 +199,8 @@ trace(float colour[], struct ray *r, struct sphere *spheres, unsigned int nspher
 	set_colour(colour, 2.0, 2.0, 2.0);
 
 	/* Construct hit point and hit normal */
-	construct_hit_normal_unit_ray(hit_normal_ray, distance);
-	inside = flip_ray_if_inside(&hit_normal_ray, r);
+	hit_normal_ray = construct_hit_normal_unit_ray(r, distance);
+	inside = flip_ray_if_inside(hit_normal_ray, r);
 
 	if ((sphere->transparency > 0 || sphere->reflection > 0) && depth < MAX_RAY_DEPTH) {
 		/* Compute reflection */
@@ -209,7 +214,7 @@ trace(float colour[], struct ray *r, struct sphere *spheres, unsigned int nspher
 		set_colour(refraction_colour, 0.0, 0.0, 0.0);
 		set_colour(reflection_colour, 0.0, 0.0, 0.0);
 
-		facing_ratio = - 1.0 * dot(ra, hit_normal);
+		facing_ratio = -1.0 * dot(ra, hit_normal);
 		construct_reflection_ray(reflection_ray, hit_point, hit_normal, bias); ...
 		trace(reflection_ray);
 		scale_colour(relfection_colour, fresnel_effect);
@@ -322,7 +327,7 @@ main(int argc, char **argv)
 	MPI_Context context;
 
 	size_t line;
-	float *row;
+	unsigned char *row;
 	struct sphere *spheres;	
 	struct screen_config screen;
 
