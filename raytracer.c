@@ -292,7 +292,8 @@ generate_scene(unsigned int nspheres, unsigned int width, unsigned int height, s
 	return spheres;
 }
 
-float c2cworld(unsigned int c, float measure_inverse)
+float
+c2cworld(unsigned int c, float measure_inverse)
 {
 	return 2.0 * (c + 0.5) * measure_inverse - 1.0;
 }
@@ -494,10 +495,11 @@ calculate_line(unsigned char *row, size_t y, size_t width, size_t nsegments, str
 		.screen = screen,
 	};
 
-	for (i = 0; i < nsegments; ++i)
+	for (i = 1; i < nsegments; ++i)
 		pthread_create(threads + i, NULL, calculate_segment, &args);
+	calculate_segment(&args);
 
-	for (i = 0; i < nsegments; ++i)
+	for (i = 1; i < nsegments; ++i)
 		pthread_join(threads[i], NULL);
 
 	free(threads);
