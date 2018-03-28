@@ -1,3 +1,4 @@
+#include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -6,8 +7,15 @@
 
 #define N 3
 #define MAX_RAY_DEPTH 5
+#define M_PI 3.14159265358979323846
 
-#define SET_COLOUR(colour, r, g, b) { colour[0] = r; colour[1] = g; colour[2] = b; }
+void
+set_vec(float vec[], float x, float y, float z)
+{
+	vec[0] = x;
+	vec[1] = y;
+	vec[2] = z;
+}
 
 void
 copy(float to[], float src[])
@@ -79,7 +87,7 @@ normalize(float vec[])
 float
 mixf(float a, float b, float mix)
 {
-    return b * mix + a * (1.0 - mix);
+    return a * mix + b * (1.0 - mix);
 }
 
 void
@@ -124,10 +132,10 @@ mul_colours(float res[], float lhs[], float rhs[])
 void
 construct(float res[], float origin[], float dir[], float length)
 {
-        float tmp[N];
-        copy(tmp, dir);
-        scale(tmp, length);
-        add(res, origin, tmp);
+	float tmp[N];
+	copy(tmp, dir);
+	scale(tmp, length);
+	add(res, origin, tmp);
 }
 
 void
@@ -197,6 +205,32 @@ randomf_in_range(float min, float max)
 	return randomf() * (max - min) + min;
 }
 
+float
+min(float lhs, float rhs)
+{
+	if (lhs < rhs)
+		return lhs;
+	else
+		return  rhs;
+}
+
+float
+max(float lhs, float rhs)
+{
+	if (lhs > rhs)
+		return lhs;
+	else
+		return  rhs;
+}
+
+void
+float2bytes(unsigned char bytes[], float floats[], size_t n)
+{
+	size_t i;
+	for (i = 0; i < n; ++i)
+		bytes[i] = min(1.0, floats[i]) * 255.0;
+}
+
 struct screen_config {
 	float width_inverse;
 	float height_inverse;
@@ -206,7 +240,7 @@ struct screen_config {
 };
 	
 struct sphere *
-generate_scene(int nspheres, unsigned int width, unsigned int height, struct screen_config *screen)
+generate_scene(unsigned int nspheres, unsigned int width, unsigned int height, struct screen_config *screen)
 {
 	unsigned int i;
 	float radius;
@@ -224,13 +258,13 @@ generate_scene(int nspheres, unsigned int width, unsigned int height, struct scr
 	spheres[0].center[2] = -20.0;
 	spheres[0].radius2 = 10000.0*10000.0;
 
-	set_colour(spheres[0].surface_colour, 0.8, 0.2, 0.2);
+	set_colour(spheres[0].surface_colour, 0.2, 0.2, 0.2);
 	set_colour(spheres[0].emission_colour, 0.0, 0.0, 0.0);
 
 	spheres[0].transparency = 0.0;
 	spheres[0].reflection = 0.0;
 
-	for (i = 1; i < nspheres - 1; ++i) {
+	for (i = 1; i + 1 < nspheres; ++i) {
 		spheres[i].center[0] = randomf_in_range(-10.0, 10.0);
 		spheres[i].center[1] = randomf_in_range(-1.0, 1.0);
 		spheres[i].center[2] = randomf_in_range(-25.0, -15.0);
@@ -258,172 +292,34 @@ generate_scene(int nspheres, unsigned int width, unsigned int height, struct scr
 	return spheres;
 }
 
-float c2cworld(unsigned int c, float measure_inverse)
+float
+c2cworld(unsigned int c, float measure_inverse)
 {
 	return 2.0 * (c + 0.5) * measure_inverse - 1.0;
 }
 
 float
-y2yworld(unsigned int y, float height_inverse, float angle)
+y2yworld(unsigned int y, struct screen_config screen)
 {
-	return -1.0 * angle * c2cworld(y, height_inverse);
+	return -1.0 * screen.angle * c2cworld(y, screen.height_inverse);
 }
 
 float
-x2xworld(unsigned int x, float width_inverse, float angle, float aspect_ratio)
+x2xworld(unsigned int x, struct screen_config screen)
 {
-	return angle * aspect_ratio * c2cworld(x, width_inverse);
+	return screen.angle * screen.aspect_ratio * c2cworld(x, screen.width_inverse);
 }
 
-void
-calculate_line(float *row, struct sphere *spheres, unsigned int nspheres,
-unsigned int y, unsigned int width, unsigned int height, struct screen_config
-screen)
-{
-	unsigned int x;
-	float xworld;
-	float yworld = y2yworld(y, screen.height_inverse, screen.angle);
-	float origin[N] = {0.0, 0.0, 0.0};
-	float dir[N];
-
-	for (x = 0; x < width; ++x, row += 3) {
-		xworld = x2xworld(x, screen.width_inverse, screen.angle, screen.aspect_ratio);
-			
-		/* Get direction of ray from camera */
-		dir[0] = xworld;
-		dir[1] = yworld;
-		dir[2] = -1.0;
-		normalize(dir);
-
-		/* Trace ray */	
-		trace(row, origin, dir, spheres, nspheres, 0);
-		//printf("(x, y) = (%f, %f) = ");
-		//print(row);
-		//printf("\n");
-	}
-}
-
-float
-min(float lhs, float rhs)
-{
-	if (lhs < rhs)
-		return lhs;
-	else
-		return  rhs;
-}
-
-void
-float2bytes(unsigned char bytes[], float floats[], size_t n)
-{
+struct segment_args {
+	unsigned char *row;
 	size_t i;
-	for (i = 0; i < n; ++i)
-		bytes[i] = min(1.0, floats[i]) * 255.0;
-}
-
-void
-save_ppm(char file_name[], float image[], unsigned int width, unsigned int height)
-{
-	size_t i;
-	FILE *fp = fopen(file_name, "wb");
-	fprintf(fp, "P6\n%u %u\n255\n", width, height);
-	for (i = 0; i < height * width; ++i) {
-		unsigned char bytes[3];
-		float2bytes(bytes, image + 3 * i, 3);
-		fwrite(bytes, sizeof(bytes[0]), 3, fp);
-	}
-	fclose(fp);
-}
-
-typedef struct {
-	int provided;
-	int size;
-	int rank;
-} MPI_Context;
-
-void
-MPI_Init_context(int *argc, char ***argv, MPI_Context *context)
-{	
-	MPI_Init_thread(argc, argv, MPI_THREAD_MULTIPLE, &context->provided);
-	MPI_Comm_size(MPI_COMM_WORLD, &context->size);
-	MPI_Comm_rank(MPI_COMM_WORLD, &context->rank);
-}
-
-
-int
-main(int argc, char **argv)
-{
-	/* Get provided support for threads, world size and world rank */
-	MPI_Status status;
-	MPI_Context context;
-
-	size_t line;
-	float *row;
-	struct sphere *spheres;	
+	pthread_mutex_t m;
+	size_t segment_length;
+	float yworld;
+	struct sphere *spheres;
+	unsigned int nspheres;
 	struct screen_config screen;
-
-	size_t width = 1280;
-	size_t height = 1024;
-	unsigned int nspheres = 100;
-
-	/* Seed random generator with lucky number */
-	srand(13);
-
-	/* Init MPI */
-	MPI_Init_context(&argc, &argv, &context);
-
-	/* Configure screen according to image size size, generate n spheres */
-	spheres = generate_scene(nspheres, width, height, &screen);
-	row = malloc(3 * width * sizeof(*row));
-	if (context.rank == 0) {
-		/* Thy bidding, master? */
-		unsigned int slave;
-		float *image = malloc(3 * width * height * sizeof(*image));
-
-		/* Send initial tasks */
-		for (line = 0; line < context.size - 1 && line < height; ++line)
-			MPI_Send(&line, 1, MPI_INT, line + 1, 0, MPI_COMM_WORLD); 
-
-		for (; line < height; ++line) {
-			MPI_Recv(row, 3 * width, MPI_FLOAT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-
-			/* Memcpy the received stuff */
-			memcpy(image + 3 * status.MPI_TAG * width, row, 3 * width * sizeof(*image));
-
-			/* Send more work */
-			MPI_Send(&line, 1, MPI_INT, status.MPI_SOURCE, 0, MPI_COMM_WORLD);
-		}
-
-		/* Signal work done */
-
-		for (slave = 1; slave < context.size; ++slave) {
-			MPI_Recv(row, 3 * width, MPI_FLOAT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-
-			/* Memcpy the received stuff */
-			memcpy(image + 3 * status.MPI_TAG * width, row, 3 * width * sizeof(*image));
-
-			/* Send height to put slave to rest */
-			MPI_Send(&height, 1, MPI_INT, slave, status.MPI_SOURCE, MPI_COMM_WORLD);
-		}
-		save_ppm("untitled.ppm", image, width, height);
-
-		/* Deallocate */
-		free(image);
-
-	} else {
-		/* Work, work */
-		while (MPI_Recv(&line, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status), line < height) {
-			calculate_line(row, spheres, nspheres, line, width, height, screen);
-			MPI_Send(row, 3*width, MPI_FLOAT, 0, line, MPI_COMM_WORLD); 
-		}
-	}
-	/* Deallocate */
-	free(row);
-	free(spheres);
-
-	/* Deinit MPI */
-	MPI_Finalize();
-	return 0;
-}
+};
 
 int
 is_light(float colour[])
@@ -435,13 +331,14 @@ is_light(float colour[])
 	return sum > 0;
 }
 
-float
-max(float lhs, float rhs)
+int
+ray_reaches(float origin[], float dir[], unsigned int i, struct sphere *spheres, unsigned int nspheres)
 {
-	if (lhs > rhs)
-		return lhs;
-	else
-		return  rhs;
+	unsigned int j;
+	for (j = 0; j < nspheres; ++j)
+		if (i != j && intersect(origin, dir, spheres + j, NULL, NULL))
+			return 0;
+	return 1;
 }
 
 int
@@ -518,7 +415,7 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 		}
 
 		/* Calculate fresnel effect */
-		fresnel_effect = fresnel(facing_ratio, 0.3);
+		fresnel_effect = fresnel(facing_ratio, 0.1);
 		mix(colour, reflection_colour, refraction_colour, fresnel_effect);
 		mul_colours(colour, colour, sphere->surface_colour);
 	} else {
@@ -528,7 +425,6 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 		/* Find lights */
 		for (i = 0; i < nspheres; ++i) {
 			if (is_light(spheres[i].emission_colour)) {
-				unsigned int j;
 				float transmission_factor;
 				float light_origin[N];
 				float light_dir[N];
@@ -548,14 +444,160 @@ trace(float colour[], float ray_origin[], float ray_dir[], struct sphere *sphere
 		} 
 	}
 	add(colour, colour, sphere->emission_colour);
-}
-
-int
-ray_reaches(float origin[], float dir[], unsigned int i, struct sphere *spheres, unsigned int nspheres)
-{
-	unsigned int j;
-	for (j = 0; j < nspheres; ++j)
-		if (i != j && intersect(origin, dir, spheres + j, NULL, NULL))
-			return 0;
 	return 1;
 }
+
+void *
+calculate_segment(void *vargs)
+{
+	struct segment_args *args;
+	size_t j;
+	size_t x;
+	float xworld;
+
+	float origin[N];
+	float dir[N];
+
+	set_vec(origin, 0.0, 0.0, 0.0);
+	args = vargs;
+
+	pthread_mutex_lock(&args->m);
+	j = args->i++;
+	pthread_mutex_unlock(&args->m);
+
+	
+	for (x = j * args->segment_length; x < (j + 1) * args->segment_length; ++x) {
+		float colour[3];
+		xworld = x2xworld(x, args->screen);
+		set_vec(dir, xworld, args->yworld, -1.0);
+		normalize(dir);
+		trace(colour, origin, dir, args->spheres, args->nspheres, 0);
+		float2bytes(args->row + 3 * x, colour, 3);
+	}
+	return NULL;
+}
+		
+void
+calculate_line(unsigned char *row, size_t y, size_t width, size_t nsegments, struct sphere *spheres, unsigned int nspheres, struct screen_config screen)
+{
+	size_t i;
+
+	pthread_t *threads = malloc(nsegments * sizeof(*threads));
+
+	float yworld = y2yworld(y, screen);
+	struct segment_args args = {
+		.row = row,
+		.i = 0,
+		.segment_length = width / nsegments,
+		.yworld = yworld,
+		.spheres = spheres,
+		.nspheres = nspheres,
+		.screen = screen,
+	};
+
+	for (i = 1; i < nsegments; ++i)
+		pthread_create(threads + i, NULL, calculate_segment, &args);
+	calculate_segment(&args);
+
+	for (i = 1; i < nsegments; ++i)
+		pthread_join(threads[i], NULL);
+
+	free(threads);
+}
+
+void
+save_ppm(char file_name[], unsigned char image[], unsigned int width, unsigned int height)
+{
+	size_t i;
+	FILE *fp = fopen(file_name, "wb");
+	fprintf(fp, "P6\n%u %u\n255\n", width, height);
+	for (i = 0; i < height * width; ++i)
+		fwrite(image + 3 * i, sizeof(image[0]), 3, fp);
+
+	fclose(fp);
+}
+
+typedef struct {
+	int provided;
+	int size;
+	int rank;
+} MPI_Context;
+
+void
+MPI_Init_context(int *argc, char ***argv, MPI_Context *context)
+{	
+	MPI_Init_thread(argc, argv, MPI_THREAD_FUNNELED, &context->provided);
+	MPI_Comm_size(MPI_COMM_WORLD, &context->size);
+	MPI_Comm_rank(MPI_COMM_WORLD, &context->rank);
+}
+
+
+int
+main(int argc, char **argv)
+{
+	/* Get provided support for threads, world size and world rank */
+	MPI_Status status;
+	MPI_Context context;
+
+	size_t line;
+	unsigned char *row;
+	struct sphere *spheres;	
+	struct screen_config screen;
+
+	size_t nsegments;
+	size_t width = 1280;
+	size_t height = 1024;
+	unsigned int nspheres = 100;
+	
+	if (argc > 2) {
+		printf("Raytracer takes one argument, number of threads. By default it is 1.\n");
+		return 0;
+	} else if (argc > 1) {
+		nsegments = atoi(argv[1]);
+	} else {
+		nsegments = 1;
+	}
+
+	srand(13);
+	MPI_Init_context(&argc, &argv, &context);
+
+	spheres = generate_scene(nspheres, width, height, &screen);
+	row = malloc(3 * width * sizeof(*row));
+
+	if (context.rank == 0) {
+		int slave;
+		unsigned char *image = malloc(3 * width * height * sizeof(*image));
+
+		for (line = 0; line < context.size - 1 && line < height; ++line)
+			MPI_Send(&line, 1, MPI_INT, line + 1, 0, MPI_COMM_WORLD); 
+
+		for (; line < height; ++line) {
+			MPI_Recv(row, 3 * width, MPI_UNSIGNED_CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+			memcpy(image + 3 * status.MPI_TAG * width, row, 3 * width * sizeof(*image));
+			MPI_Send(&line, 1, MPI_INT, status.MPI_SOURCE, 0, MPI_COMM_WORLD);
+		}
+
+		for (slave = 1; slave < context.size; ++slave) {
+			MPI_Recv(row, 3 * width, MPI_UNSIGNED_CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+			memcpy(image + 3 * status.MPI_TAG * width, row, 3 * width * sizeof(*image));
+			MPI_Send(&height, 1, MPI_INT, slave, status.MPI_SOURCE, MPI_COMM_WORLD);
+		}
+		save_ppm("untitled.ppm", image, width, height);
+		free(image);
+
+	} else {
+		/* Work, work */
+		while (MPI_Recv(&line, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status), line < height) {
+			calculate_line(row, line, width, nsegments, spheres, nspheres, screen);
+			MPI_Send(row, 3*width, MPI_UNSIGNED_CHAR, 0, line, MPI_COMM_WORLD); 
+		}
+	}
+	/* Deallocate */
+	free(row);
+	free(spheres);
+
+	/* Deinit MPI */
+	MPI_Finalize();
+	return 0;
+}
+
